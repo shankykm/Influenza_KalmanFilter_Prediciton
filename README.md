@@ -78,6 +78,19 @@ This project:
 
 ---
 
+## **⚠️ Important Cautions**
+
+### **Step 3: Kalman Filter (KF) Models**
+- **MCMC Sampling Warning**:
+  - The **Kalman Filter models (Step 3)** use **Markov Chain Monte Carlo (MCMC) sampling** to generate posterior distributions for model parameters.
+  - **This process is computationally intensive** and can take **several hours or more** to complete, depending on your system's resources.
+  - **Recommendations**:
+    - Test the code on a **small subset of data** (e.g., 1 year instead of 4) to estimate runtime.
+    - Consider **parallelizing loops** or **reducing the number of MCMC iterations** for faster execution.
+    - Use a **high-performance computing environment** if available.
+
+---
+
 ## **How to Run the Code**
 1. **Prerequisites**:
    - Install R (version 4.0 or later).
