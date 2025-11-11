@@ -51,7 +51,7 @@ This project:
 
 #### **B. Bivariate KF for Positive Cases**
 - **Model Definition** (`bivar_kfar1gaussJags8_2`):
-  - Models both total volume and detected cases, using the difference in smoothed total volume as a covariate.
+  - Models both total volume and detected cases, in difference scale and uses smoothed total volume (from step 2) as a covariate .
   - Extracts informative priors from historical data.
 - **Forecasting**:
   - Forecasts positive cases and total volume, undoing the differencing to return to the original scale.
