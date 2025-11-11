@@ -1,4 +1,4 @@
-# Flu Data Simulation and Forecasting with Kalman Filter and SARIMA
+# Influenza (Flu) Data Simulation and Forecasting with Kalman Filter and SARIMA
 This repository contains R code for simulating flu data and forecasting using **Kalman Filter (KF)** and **SARIMA** models. The code is designed for researchers, data scientists, and epidemiologists interested in time series forecasting for public health applications.
 
 ![GitHub](https://github.com/shankykm/Influenza_KalmanFilter_Prediciton.git)
