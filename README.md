@@ -9,8 +9,8 @@ This repository contains R code for simulating flu data and forecasting using **
 This project:
 - Simulates synthetic weekly flu data (positive cases and total lab test volumes) for 4 years (2016–2019).
 - Implements **Kalman Filter (KF)** models (ensemble and bivariate) to forecast flu positive cases (P) and lab test volumes (T).
-- Uses **SARIMA** for comparison.
 - Extracts **historical smoothed estimates** using a KF AR(1) model to serve as covariates for the Positive Case Model.
+- Uses **SARIMA** for comparison.
 - Evaluates model performance using **Mean Absolute Deviation (MAD)** and **coverage probability**.
 - Visualizes forecasts and performance metrics.
 
