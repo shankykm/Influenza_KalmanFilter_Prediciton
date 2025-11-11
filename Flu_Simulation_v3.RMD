@@ -1,0 +1,1987 @@
+---
+title: "OH_Flu_final"
+author: "Mani, Schumacher, Rempala and Kenah"
+date: "2025-10-14"
+output: html_document
+---
+
+# loading required libraries
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, warning = FALSE, message = FALSE)
+
+library(readxl)
+library(tidyverse)
+library(lubridate)
+library(knitr)
+library(anytime)
+library(writexl)
+library(padr)
+library(tidyr)
+library(broom)
+library(forecast)
+library(ModelMetrics)
+library(car)
+library(KFAS)
+library(rjags)
+library(R2jags)
+library(mgcv)
+
+set.seed(0)
+
+
+```
+
+# R Code to Simulate Dataset
+
+```{r Method1, warning=FALSE, message=FALSE}
+
+# Install and load the required packages
+if (!require("mvtnorm")) install.packages("mvtnorm")
+if (!require("MASS")) install.packages("MASS")
+library(mvtnorm)
+library(MASS)
+
+## Method 1
+# Set seed for reproducibility
+set.seed(123)
+
+# Number of weeks and years to simulate
+n_weeks <- 52
+n_years <- 4
+years <- 2016:2019
+
+# Synthetic Weekly means and standard deviations for P and T. Derived from our original dataset but with noise
+
+mean_P <- c(
+  1.75, 2.00, 1.75, 2.75, 2.75, 2.25, 2.00, 3.50, 3.75, 7.00, 6.50, 6.50,
+  15.00, 20.75, 30.00, 76.25, 125.25, 59.00, 147.25, 133.50, 117.25, 154.25, 208.00, 248.25,
+  303.00, 257.75, 239.00, 270.75, 281.50, 208.75, 138.00, 90.75, 60.25, 44.00, 20.25, 14.00,
+  10.50, 7.00, 0.50, 0.25, 0.75, 0.75, 0.25, 0.75, 0.25, 0.75, 0.75, 1.00, 0.75, 0.50
+)
+
+SD_P <- c(
+  1.5000000, 2.8284271, 0.5000000, 2.9860788, 1.7078251, 0.9574271, 1.8257419, 0.5773503,
+  1.7078251, 4.2426407, 3.7859389, 5.8022984, 16.1658075, 28.3710533, 46.1519230,
+  116.1217034, 209.7162766, 41.9046537, 216.0993213, 159.6527482, 116.1934450,
+  114.6338374, 136.5381510, 154.9459583, 176.9086393, 129.2088103, 144.0833092,
+  232.4684566, 222.4717210, 126.9760476, 64.3946168, 9.1058589, 21.6082546, 21.7715411,
+  13.8172597, 12.3558353, 8.6986589, 6.3770422, 3.5939764, 7.5000000, 1.0000000,
+  0.5000000, 0.9574271, 0.9574271, 0.5000000, 0.9574271, 0.9574271, 1.4142136,
+  0.9574271, 0.5773503
+)
+
+mean_T <- c(
+  156.00, 223.50, 311.00, 364.50, 381.00, 477.00, 494.00, 529.50, 618.00, 664.00,
+  716.75, 704.00, 860.50, 852.00, 868.50, 1112.50, 1451.75, 933.00, 1558.50, 1275.50,
+  1162.50, 1269.50, 1496.50, 1726.50, 1968.50, 1779.00, 1754.50, 1885.50, 1951.50, 1678.00,
+  1386.00, 1155.50, 965.00, 788.00, 602.50, 518.50, 483.50, 370.50, 271.50, 226.50,
+  153.00, 109.00, 106.00, 74.00, 81.00, 87.00, 78.50, 63.50, 87.00, 95.00, 78.00, 90.00
+)
+
+SD_T <- c(
+  119.57703, 146.65492, 169.37926, 121.57165, 116.54470, 76.67246, 108.40664, 87.19901,
+  151.11144, 187.75161, 153.40877, 191.22761, 261.59702, 326.65986, 406.86238,
+  753.35583, 1112.15058, 388.94558, 1177.50400, 663.04625, 473.45362, 527.39201,
+  644.10222, 819.32228, 912.44927, 658.22691, 670.30814, 1105.84071, 1170.08191,
+  856.58547, 577.69427, 351.66414, 144.89591, 104.90591, 83.06423, 92.84216,
+  73.18242, 32.95957, 77.48333, 103.27149, 113.44896, 103.44080, 118.98459,
+  85.46344, 93.75856, 102.05227, 90.82401, 73.43705, 100.57833, 109.80589,
+  96.96735, 104.24331
+)
+
+# Pad the lists to ensure they all have 52 elements
+mean_P <- c(mean_P, rep(mean_P[length(mean_P)], 52 - length(mean_P)))
+SD_P <- c(SD_P, rep(SD_P[length(SD_P)], 52 - length(SD_P)))
+mean_T <- c(mean_T, rep(mean_T[length(mean_T)], 52 - length(mean_T)))
+SD_T <- c(SD_T, rep(SD_T[length(SD_T)], 52 - length(SD_T)))
+
+# Initialize vectors for simulated data
+P_simulated <- numeric(n_weeks * n_years)
+T_simulated <- numeric(n_weeks * n_years)
+year <- integer(n_weeks * n_years)
+week <- integer(n_weeks * n_years)
+
+# Simulate data for 4 years
+pho <- 0.93  # Correlation between P and T
+for (i in 1:n_years) {
+  for (j in 1:n_weeks) {
+    index <- (i - 1) * n_weeks + j
+    cov_matrix <- matrix(c(SD_P[j]^2, pho * SD_P[j] * SD_T[j],
+                           pho * SD_P[j] * SD_T[j], SD_T[j]^2), nrow = 2)
+    # Ensure the covariance matrix is positive definite
+    cov_matrix <- cov_matrix + diag(c(0.01, 0.01)) * max(diag(cov_matrix)) * 1e-6
+    simulated_values <- MASS::mvrnorm(1, c(mean_P[j], mean_T[j]), cov_matrix)
+    P_simulated[index] <- max(0, simulated_values[1])
+    T_simulated[index] <- max(0, simulated_values[2])
+    year[index] <- years[i]
+    week[index] <- j
+  }
+}
+
+# Create a data frame for the simulated data
+flu_data <- data.frame(
+  year = year,
+  week = week,
+  Detected = round(P_simulated, 0),
+  total_vol = round(T_simulated, 0)
+) 
+
+# Print the first 10 rows of the simulated data
+head(flu_data, 10)
+
+# Reshape data to long format
+flu_data_long <- flu_data %>%
+  pivot_longer(cols = c(total_vol, Detected),
+               names_to = "Variable", values_to = "Value")
+
+# Plot T and P by Year and Week, faceted by Year
+ggplot(flu_data_long, aes(x = week, y = Value, color = Variable)) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 1.5) +
+  facet_wrap(~ year, nrow = 1) +
+  labs(
+    title = "Method 1 Weekly Total Lab Test Volume (T) and Positive Cases (P) by Year",
+    x = "Week of the Year",
+    y = "Value",
+    color = "Variable"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 9)
+  )
+
+```
+
+# KF AR(1) Model to extract average historical smoothed estimates as Covariate for Positive Case Model
+
+```{r warning=FALSE, message=FALSE, echo=FALSE}
+
+smooth_AR_1_bivar_SSM <- function(data, dependent_var1, dependent_var2, 
+                                  id, seasonal_Year){
+   
+    # data <- ssm_total_vol
+    # dependent_var1 <- "total_vol"
+    # dependent_var2 <- "Detected"
+    # id <- "id"
+    # seasonal_Year = 2022
+    
+    smoothed_values_df <- data.frame()
+    #print(dependent_var1)
+    #print(dependent_var2)
+    #print(data)
+    col1 <- ts(data[, dependent_var1], start=1)
+    col2 <- ts(data[, dependent_var2], start=1)
+    id <- data[, id]
+
+    
+    bivar_smooth_model <- SSModel(cbind(col1, col2)~ -1  +
+                                 #SSMarima(ar=rep(0, 1),d=0,index=c(1))+
+                                 SSMarima(ar=rep(0, 1), d=0)
+                                 )
+    
+    # Update function for model
+    updatefn_bivar <- function(pars, model){
+      T <- artransform(pars[1:2])
+      model["T", states = "arima"] <- T
+      Q <- diag(pars[3:4])
+      Q[upper.tri(Q)] <- pars[5]
+      model["Q", etas = "arima"] <- model["P1", states = "arima"] <- crossprod(Q)
+      #print(model["Q", etas = "arima"])
+      #Q <- diag(pars[6:7])
+      #model["Q", etas = "regression"] <- crossprod(Q)
+      model["R", ] <- model$R
+      model
+    }
+    
+    #check that variances are non-negative
+    check_model <- function(model) {
+      (model["H"] > 0 && model["Q"] > 0)
+    }
+    
+    #Fit the model
+    fit <- fitSSM(bivar_smooth_model, inits=c(rep(0.01, 2),rep(1, 3)),
+                  updatefn_bivar, lower = c(rep(-0.99, 2), rep(1, 3)),
+                  upper = c(rep(0.99, 2), rep(1000000, 3)),
+                  method='L-BFGS-B', checkfn = check_model)
+    
+    kfs_model <- KFS(fit$model)
+    
+    # compute one step ahead forecast aka. smoothed estimates
+    # https://rdrr.io/cran/KFAS/man/fitted.SSModel.html
+    smoothed_values_df <- data.frame(fitted(kfs_model))
+    
+    cbind(replace(smoothed_values_df, smoothed_values_df < 0, 0), id,
+                              rep(seasonal_Year, nrow(smoothed_values_df)))
+}
+
+flu_data_estimates <- flu_data %>% 
+  dplyr::select(year, week, Detected, total_vol) %>%  
+  pivot_wider(names_from = year, values_from = c(Detected, total_vol))
+
+for (var in c("total_vol", "Detected")){
+  flu_data_estimates <- flu_data_estimates %>% 
+    rowwise() %>% 
+    mutate("{var}_avg_excl_2016" := mean(c(!!sym(paste(var, "_2017", sep="")), 
+                                           !!sym(paste(var, "_2018", sep="")),
+                                           !!sym(paste(var, "_2019", sep="")))),
+           
+           "{var}_avg_excl_2017" := mean(c(!!sym(paste(var, "_2016", sep="")), 
+                                           !!sym(paste(var, "_2018", sep="")),
+                                           !!sym(paste(var, "_2019", sep="")))),
+           
+           "{var}_avg_excl_2018" := mean(c(!!sym(paste(var, "_2016", sep="")), 
+                                           !!sym(paste(var, "_2017", sep="")),
+                                           !!sym(paste(var, "_2019", sep="")))),
+           
+           "{var}_avg_excl_2019" := mean(c(!!sym(paste(var, "_2016", sep="")), 
+                                           !!sym(paste(var, "_2017", sep="")),
+                                           !!sym(paste(var, "_2018", sep="")))),
+           
+           "{var}_med_excl_2016" := median(c(!!sym(paste(var, "_2017", sep="")), 
+                                             !!sym(paste(var, "_2018", sep="")),
+                                             !!sym(paste(var, "_2019", sep="")))),
+           
+           "{var}_med_excl_2017" := median(c(!!sym(paste(var, "_2016", sep="")), 
+                                             !!sym(paste(var, "_2018", sep="")),
+                                             !!sym(paste(var, "_2019", sep="")))),
+           
+           "{var}_med_excl_2018" := median(c(!!sym(paste(var, "_2016", sep="")), 
+                                             !!sym(paste(var, "_2017", sep="")),
+                                             !!sym(paste(var, "_2019", sep="")))),
+           
+           "{var}_med_excl_2019" := median(c(!!sym(paste(var, "_2016", sep="")), 
+                                             !!sym(paste(var, "_2017", sep="")),
+                                             !!sym(paste(var, "_2018", sep=""))))
+           
+        )
+  
+}
+
+flu_data_estimates <- flu_data_estimates %>% 
+                            dplyr:: select(starts_with(c("week","total_vol_avg_excl_",
+                                                         "Detected_avg_excl_",
+                                                         "total_vol_med_excl_",
+                                                         "Detected_med_excl_"))
+                                           )
+ar1_smooth <- data.frame()
+for (i in (2016:2019)){
+
+  ar1_smooth <- rbind(smooth_AR_1_bivar_SSM(flu_data_estimates, paste("total_vol_med_excl_", i, sep=""),
+                                           paste("Detected_med_excl_", i, sep=""), 
+                                           "week", i), ar1_smooth) 
+}
+
+names(ar1_smooth) <- c("smoothed_total_vol.fit", 
+                       "smoothed_Detected.fit", "week", "year")
+
+ar1_smooth %>% 
+  ggplot(.)+
+   geom_line(aes(x=week, y=smoothed_total_vol.fit, color="smoothed_total_vol.fit"))+
+   geom_line(aes(x=week, y=smoothed_Detected.fit, color="smoothed_Detected.fit")) +
+   facet_wrap(vars(year), scales = 'free', nrow = 2)+
+   theme(legend.position = "bottom")+
+   ggtitle("Historical Smoothed Estimates")
+
+flu_data <- left_join(flu_data, ar1_smooth, 
+                                         by = c("week" = "week", 
+                                                "year"="year"))
+
+flu_data <- flu_data %>% 
+  arrange(year, week) %>% 
+  mutate(diff_smoothed_total_vol.fit = ifelse(year == 2016 & week==1, 50, 
+                                              smoothed_total_vol.fit - lag(smoothed_total_vol.fit)),
+         diff_smoothed_Detected.fit = ifelse(year == 2016 & week==1, 0, 
+                                             smoothed_Detected.fit - lag(smoothed_Detected.fit))
+         )
+```
+
+# Ensemble KF Model For Total Cases
+
+## Extract historical priors Model Defintion
+
+```{r jagsModel, eval=FALSE, warning=FALSE, message=FALSE, echo=FALSE}
+kf_ensemble_extractInformativePrior  <- "
+model {
+  # non informative priors on all parameters for kfar1guassJags_covariance_6.
+  theta_1[1,1] ~  dunif(-1, 1)
+  theta_1[1,2] <- 0
+  theta_1[2,1] <- 0
+  theta_1[2,2] ~  dunif(-1, 1)
+  
+  state.sigma[1] ~ dunif(1, 500) 
+  state.sigma[2] ~ dunif(1, 500)
+  obs.sigma[1] ~ dunif(1, 500) 
+  obs.sigma[2] ~ dunif(1, 500)
+  
+  state.rho ~ dunif(-1, 1)
+  obs.rho ~ dunif(-1, 1)
+  
+  state.cov[1,1] <- state.sigma[1] * state.sigma[1]
+  state.cov[1,2] <- state.sigma[1] * state.sigma[2] * state.rho
+  state.cov[2,1] <- state.sigma[1] * state.sigma[2] * state.rho
+  state.cov[2,2] <- state.sigma[2] * state.sigma[2]
+  state.prec[1:2,1:2] <- inverse(state.cov[,])
+  
+  obs.cov[1,1] <- obs.sigma[1] * obs.sigma[1]
+  obs.cov[1,2] <- obs.sigma[1] * obs.sigma[2] * obs.rho
+  obs.cov[2,1] <- obs.sigma[1] * obs.sigma[2] * obs.rho
+  obs.cov[2,2] <- obs.sigma[2] * obs.sigma[2]
+  obs.prec[1:2,1:2] <- inverse(obs.cov[,])
+  
+  ### state process equation
+  # 1st time step (based on a known value)
+  z[1,1] <- z1_init
+  z[1,2] <- z2_init
+  
+  p[1, 1, 1] <- p1_init
+  p[1, 1, 2] <- 1
+  p[1, 2, 1] <- 1
+  p[1, 2, 2] <- p2_init
+
+  #define 2*2 identity matrix
+  identity_matrix[1, 1] <- 1
+  identity_matrix[2, 2] <- 1
+  identity_matrix[1, 2] <- 0
+  identity_matrix[2, 1] <- 0
+  
+  # non informative Priors for kfar1covguass_Jags3 model
+  theta2_1 ~  dunif(-1, 1)
+  
+  inv.state.variance ~ dgamma(0.001, 0.001)
+  inv.obs.variance.1  ~ dgamma(0.001, 0.001)
+  inv.obs.variance.2  ~ dgamma(0.001, 0.001)
+  
+  # Transform inv.variance to variance
+  state.variance <- 1/(inv.state.variance)
+  obs.variance.1 <- 1/(inv.obs.variance.1)
+  obs.variance.2 <- 1/(inv.obs.variance.2)
+  
+  p12[1] <- p1_init
+  z12[1] <- z1_init
+  
+  # non infomrative priors for ensemble weight
+  w1 ~  dunif(0, 1)
+  z_ensemble[1] <- z1_init
+  
+  # Remaining time steps
+  for(k in 2:TT){ #at the begining of time step t we wouldn't observe value for t but for t-1
+ 
+  # Model1 definition for kfar1guassJags_covariance_6
+    # compute kalman gain for the previous step becasue we would have observed t-1
+    kg[k-1, 1:2, 1:2] <- p[k-1, , ] %*% inverse(p[k-1, , ] + obs.cov[,])
+     
+    # update the predictions made for previous step, t-1, by kalman gain and observed value for t-1
+    z_update[k, 1:2] <- z[k-1, ] + c( t( kg[k-1, , ] %*% t(t(y[k-1,] - z[k-1,])) ) ) 
+    p_update[k, 1:2, 1:2] <- ( (identity_matrix[,] - kg[k-1, , ]) %*% p[k-1, , ] %*% 
+                             t((identity_matrix[,] - kg[k-1, , ])) )  + 
+                             (kg[k-1, , ] %*% obs.cov[,] %*% t(kg[k-1, , ]))
+    
+    # predict the current step, t, value using the updated previous step predictions
+    # estimate covariance
+    p[k, 1:2, 1:2] <- state.cov[,] + (theta_1[,] %*% p_update[k, , ] %*% t(theta_1[,]) )
+    # estimate mean
+    mu[k,1:2] <- c( t( theta_1[,] %*% t(t(z_update[k,1:2])) ) )
+    z[k,1:2] ~ dmnorm( mu[k,1:2], inverse(p[k, 1:2, 1:2]) )
+    z11[k] <- z[k,1]
+    z21[k] <- z[k,2]
+    
+  # Model2 definition for kfar1covguass_Jags3
+    # compute kalman gain for the previous step becasue we would have observed t-1
+    k12[k-1] <- p12[k-1]/(p12[k-1] + obs.variance.1)
+    
+    # update the predictions made for previous step, t-1, by kalman gain and observed value for t-1
+    z12_update[k] <- z12[k-1] + (k12[k-1]*(y[k-1, 1] - z12[k-1]))
+    p12_update[k] <- (1-k12[k-1])*p12[k-1]
+    
+    # predict the current step, t, value using the updated previous step predictions
+    p12[k] <- state.variance+(p12_update[k]*theta2_1^2)
+    z12[k] ~ dnorm(z12_update[k]*theta2_1, 1/p12[k])
+    
+  # weighted average from two models
+    z_ensemble[k] <- (w1*z11[k]) + ((1-w1)*z12[k])
+  }
+  
+  k12[TT] <- k12[TT-1]
+  kg[TT, 1:2, 1:2] <- kg[TT-1, 1:2, 1:2]
+  
+  # Observation equations
+  for(j in 1:TT) {
+    y[j,1:2] ~ dmnorm(z[j,1:2], inverse(obs.cov[,])) #model1
+    
+    y12[j] ~ dnorm(z12[j], 1/obs.variance.1) #model2
+    
+    yensemb[j] ~ dnorm(z_ensemble[j], 1/obs.variance.2) #ensemble model
+  }
+
+}"
+
+kf_ensem_extractinformativePriors <- function(data, dependent_var1="", 
+                                              dependent_var2="",
+                                              covar1 = "",
+                                              seasonalYear,
+                                              model_name="kf_ensemble_extractInformativePrior",
+                                              nc=3, burn=1000, infer=10000){
+  # forecasted_values <- matrix(0, h, 2)
+  print(paste(seasonalYear, model_name, sep=","))
+  estimated_values_df <- data.frame()
+  
+  col1 <- c(ts(data[, dependent_var1], start=1))
+  col2 <- c(ts(data[, dependent_var2], start=1))
+  # cov1 <- c(ts(data[, covar1], start=1))
+  # cov2 <- c(ts(data[, dependent_var1], start=1))
+  
+  TT <- length(col1)
+  y <- cbind(matrix(col1, nrow=length(col1)),
+          matrix(col2, nrow=length(col2)))
+  # y12 <- col1
+  # yensemb <- col1
+  dataar1Jags <- list(TT=TT, y=y, y12=col1, yensemb=col1,
+                      # cov1=cov1, cov2=cov2, 
+                      z1_init=col1[1], z2_init=col2[1], 
+                      p1_init=10, p2_init=1)
+  ncar1Jags <- nc #no of chains
+  burnar1Jags <- burn
+  inferar1Jags <- infer
+  print(dataar1Jags)
+  model <- get(noquote(model_name))
+  mar1Jags <- jags.model(file=textConnection(object=model),
+                         data=dataar1Jags,
+                         n.chains=ncar1Jags)
+  
+  update(mar1Jags, n.iter=burnar1Jags)
+  
+  jagsar1VarM <- c("theta_1", "state.sigma", "obs.sigma", 
+                   "state.rho", "obs.rho",
+                   "inv.state.variance", "inv.obs.variance.1", "inv.obs.variance.2",
+                   "w1", "theta2_1"
+                   )
+
+  
+  far1Jags <- coda.samples(mar1Jags,
+                           variable.names=jagsar1VarM,
+                           n.iter=inferar1Jags)
+  
+  
+  theta_1_1_fit_mean <- unname(summary(far1Jags[,paste0("theta_1[1,1]"),])$statistics["Mean"])
+  theta_1_2_fit_mean <- unname(summary(far1Jags[,paste0("theta_1[1,2]"),])$statistics["Mean"])
+  theta_2_1_fit_mean <- unname(summary(far1Jags[,paste0("theta_1[2,1]"),])$statistics["Mean"])
+  theta_2_2_fit_mean <- unname(summary(far1Jags[,paste0("theta_1[2,2]"),])$statistics["Mean"])
+  
+  state.sigma_1_fit_mean <- unname(summary(far1Jags[,paste0("state.sigma[1]"),])$statistics["Mean"])
+  state.sigma_2_fit_mean <- unname(summary(far1Jags[,paste0("state.sigma[2]"),])$statistics["Mean"])
+  obs.sigma_1_fit_mean <- unname(summary(far1Jags[,paste0("obs.sigma[1]"),])$statistics["Mean"])
+  obs.sigma_2_fit_mean <- unname(summary(far1Jags[,paste0("obs.sigma[2]"),])$statistics["Mean"])
+  state.rho_fit_mean <- unname(summary(far1Jags[,paste0("state.rho"),])$statistics["Mean"])
+  obs.rho_fit_mean <- unname(summary(far1Jags[,paste0("obs.rho"),])$statistics["Mean"])
+  
+  inv.state.variance_fit <-  unname(summary(far1Jags[,paste0("inv.state.variance"),])$statistics["Mean"])
+  inv.obs.variance.1_fit<- unname(summary(far1Jags[,paste0("inv.obs.variance.1"),])$statistics["Mean"])
+  inv.obs.variance.2_fit<- unname(summary(far1Jags[,paste0("inv.obs.variance.2"),])$statistics["Mean"])
+  theta2_1_fit_mean <- unname(summary(far1Jags[,paste0("theta2_1"),])$statistics["Mean"])
+  w1_fit_mean <- unname(summary(far1Jags[,paste0("w1"),])$statistics["Mean"])  
+
+   estimate <- setNames(data.frame(theta_1_1_fit_mean, theta_1_2_fit_mean, 
+                                  NA,
+                                  theta_2_1_fit_mean, theta_2_2_fit_mean, 
+                                  NA, 
+                                  state.sigma_1_fit_mean, state.sigma_2_fit_mean,
+                                  obs.sigma_1_fit_mean, obs.sigma_2_fit_mean,
+                                  state.rho_fit_mean, obs.rho_fit_mean,
+                                  inv.state.variance_fit, inv.obs.variance.1_fit,
+                                  inv.obs.variance.2_fit, theta2_1_fit_mean,
+                                  w1_fit_mean, seasonalYear, model_name),
+                       c("theta_1_1_fit_mean", "theta_1_2_fit_mean", 
+                         "theta_1_3_fit_mean",
+                         "theta_2_1_fit_mean", "theta_2_2_fit_mean",
+                         "theta_2_3_fit_mean",
+                         "state.sigma_1_fit_mean", "state.sigma_2_fit_mean",
+                         "obs.sigma_1_fit_mean", "obs.sigma_2_fit_mean",
+                         "state.rho_fit_mean", "obs.rho_fit_mean",
+                         "inv.state.variance_fit", "inv.obs.variance.1_fit",
+                         "inv.obs.variance.2_fit",
+                         "theta2_1_fit_mean", "w1_fit_mean",
+                         "seasonal_Year", "model_name")) 
+
+  
+  rownames(forecast) <- NULL
+  estimated_values_df <- rbind(estimated_values_df, estimate)
+  
+  data.frame(estimated_values_df)
+}
+```
+
+## Extract historical priors
+
+```{r callJags, eval=FALSE,}
+# Extract informative priors
+set.seed(100)
+kf_ensem_informativePriors_jags_df <- data.frame()
+
+for(model in c("kf_ensemble_extractInformativePrior")){
+  
+  kf_ensem_informativePrior_jags_predict <- flu_data %>% 
+    filter(year %in% years & !week==53) %>%
+    group_by(year) %>% 
+    arrange(week) %>% 
+    do(kf_ensem_extractinformativePriors(., "total_vol", "Detected",
+                                         covar1 = "",
+                                         first(.$year), 
+                                         model_name=model,
+                                         nc=3, burn=1000, 
+                                         infer=10000
+    )
+    )
+  
+  kf_ensem_informativePriors_jags_df <- rbind(kf_ensem_informativePriors_jags_df, 
+                                              kf_ensem_informativePrior_jags_predict)
+}
+
+# write.csv(
+#   kf_ensem_informativePriors_jags_df,
+#   file = "simul_kf_ensem_informativePriors_jags_df.csv",
+#   row.names = FALSE
+# )
+# 
+# kf_ensem_informativePriors_jags_df <- read.csv(
+#   "simul_kf_ensem_informativePriors_jags_df.csv",
+#   header = TRUE
+# )
+
+kf_ensem_informativePriors_agg_df <- data.frame()
+for(sy in years){
+  kf_ensem_informativePriors_agg <- kf_ensem_informativePriors_jags_df %>% 
+    filter(seasonal_Year != sy) %>% 
+    group_by(model_name) %>% 
+    summarise(across(
+      .cols = where(is.numeric), 
+      .fns = list(Mean = mean, SD = sd), na.rm = TRUE, 
+      .names = "{col}_{fn}")) %>% 
+    mutate(seasonal_Year = sy)   
+  
+  kf_ensem_informativePriors_agg_df <- rbind(kf_ensem_informativePriors_agg_df, 
+                                                  kf_ensem_informativePriors_agg)
+} 
+
+# https://www.youtube.com/watch?app=desktop&v=DN8ZoLKH6Nw
+kf_ensem_informativePriors_agg_df <- kf_ensem_informativePriors_agg_df %>% 
+  mutate(
+    #model 1 parameters
+    theta_1_1.hyper.a = theta_1_1_fit_mean_Mean - sqrt(3*(theta_1_1_fit_mean_SD^2)),
+    theta_1_1.hyper.b = theta_1_1_fit_mean_Mean + sqrt(3*(theta_1_1_fit_mean_SD^2)),
+    theta_2_2.hyper.a = theta_2_2_fit_mean_Mean - sqrt(3*(theta_2_2_fit_mean_SD^2)),
+    theta_2_2.hyper.b = theta_2_2_fit_mean_Mean + sqrt(3*(theta_2_2_fit_mean_SD^2)),
+    state.sigma.1.a.hyper=state.sigma_1_fit_mean_Mean - sqrt(3*(state.sigma_1_fit_mean_SD^2)),
+    state.sigma.1.b.hyper=state.sigma_1_fit_mean_Mean + sqrt(3*(state.sigma_1_fit_mean_SD^2)),
+    obs.sigma.1.a.hyper=obs.sigma_1_fit_mean_Mean - sqrt(3*(obs.sigma_1_fit_mean_SD^2)),
+    obs.sigma.1.b.hyper=obs.sigma_1_fit_mean_Mean + sqrt(3*(obs.sigma_1_fit_mean_SD^2)),
+    state.sigma.2.a.hyper=state.sigma_2_fit_mean_Mean - sqrt(3*(state.sigma_2_fit_mean_SD^2)),
+    state.sigma.2.b.hyper=state.sigma_2_fit_mean_Mean + sqrt(3*(state.sigma_2_fit_mean_SD^2)),
+    obs.sigma.2.a.hyper=obs.sigma_2_fit_mean_Mean - sqrt(3*(obs.sigma_2_fit_mean_SD^2)),
+    obs.sigma.2.b.hyper=obs.sigma_2_fit_mean_Mean + sqrt(3*(obs.sigma_2_fit_mean_SD^2)),
+    state.rho.a.hyper=state.rho_fit_mean_Mean - sqrt(3*(state.rho_fit_mean_SD^2)),
+    state.rho.b.hyper=state.rho_fit_mean_Mean + sqrt(3*(state.rho_fit_mean_SD^2)),
+    obs.rho.a.hyper=obs.rho_fit_mean_Mean - sqrt(3*(obs.rho_fit_mean_SD^2)),
+    obs.rho.b.hyper=obs.rho_fit_mean_Mean + sqrt(3*(obs.rho_fit_mean_SD^2)),
+    #model 2 parameters
+    theta2_1.hyper.a = theta2_1_fit_mean_Mean - sqrt(3*(theta2_1_fit_mean_SD^2)),
+    theta2_1.hyper.b = theta2_1_fit_mean_Mean + sqrt(3*(theta2_1_fit_mean_SD^2)),
+    inv.state.variance.hyper.b = inv.state.variance_fit_Mean/(inv.state.variance_fit_SD^2),
+    inv.state.variance.hyper.a = inv.state.variance.hyper.b*inv.state.variance_fit_Mean,
+    inv.obs.variance.1.hyper.b = inv.obs.variance.1_fit_Mean/(inv.obs.variance.1_fit_SD^2),
+    inv.obs.variance.1.hyper.a = inv.obs.variance.1.hyper.b*inv.obs.variance.1_fit_Mean,
+    inv.obs.variance.2.hyper.b = inv.obs.variance.2_fit_Mean/(inv.obs.variance.2_fit_SD^2),
+    inv.obs.variance.2.hyper.a = inv.obs.variance.2.hyper.b*inv.obs.variance.2_fit_Mean,
+    #enems parameters
+    w1.hyper.a = w1_fit_mean_Mean - sqrt(3*(w1_fit_mean_SD^2)),
+    w1.hyper.b = w1_fit_mean_Mean + sqrt(3*(w1_fit_mean_SD^2))
+  ) %>% 
+  mutate(
+    # model1
+    theta_1_1.hyper.a = ifelse(theta_1_1.hyper.a < -1, -1, theta_1_1.hyper.a),
+    theta_1_1.hyper.b = ifelse(theta_1_1.hyper.b > 1, 1, theta_1_1.hyper.b),
+    theta_2_2.hyper.a = ifelse(theta_2_2.hyper.a < -1, -1, theta_2_2.hyper.a),
+    theta_2_2.hyper.b = ifelse(theta_2_2.hyper.b > 1, 1, theta_2_2.hyper.b),
+    state.sigma.1.a.hyper = ifelse(state.sigma.1.a.hyper<0, 1, state.sigma.1.a.hyper),
+    state.sigma.1.b.hyper = ifelse(state.sigma.1.b.hyper<0, 500, state.sigma.1.b.hyper),
+    obs.sigma.1.a.hyper = ifelse(obs.sigma.1.a.hyper<0, 1, obs.sigma.1.a.hyper),
+    obs.sigma.1.b.hyper = ifelse(obs.sigma.1.b.hyper<0, 500, obs.sigma.1.b.hyper),
+    state.sigma.2.a.hyper = ifelse(state.sigma.2.a.hyper<0, 1, state.sigma.2.a.hyper),
+    state.sigma.2.b.hyper = ifelse(state.sigma.2.b.hyper<0, 500, state.sigma.2.b.hyper),
+    obs.sigma.2.a.hyper = ifelse(obs.sigma.2.a.hyper<0, 1, obs.sigma.2.a.hyper),
+    obs.sigma.2.b.hyper = ifelse(obs.sigma.2.b.hyper<0, 500, obs.sigma.2.b.hyper),
+    state.rho.a.hyper = ifelse(state.rho.a.hyper<-1, -1, state.rho.a.hyper),
+    state.rho.b.hyper = ifelse(state.rho.b.hyper>1, 1, state.rho.b.hyper),
+    obs.rho.a.hyper = ifelse(obs.rho.a.hyper<-1, -1, obs.rho.a.hyper),
+    obs.rho.b.hyper = ifelse(obs.rho.b.hyper>1, 1, obs.rho.b.hyper),
+    #model2
+    theta2_1.hyper.a = ifelse(theta2_1.hyper.a < -1, -1, theta2_1.hyper.a),
+    theta2_1.hyper.b = ifelse(theta2_1.hyper.b > 1, 1, theta2_1.hyper.b),
+    #ensem model
+    w1.hyper.a = ifelse(w1.hyper.a<0, 0, w1.hyper.a),
+    w1.hyper.b = ifelse(w1.hyper.b>1, 1, w1.hyper.b)
+    
+  )
+
+# setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+# write.csv(kf_ensem_informativePriors_agg_df, file="simul_kf_ensem_informativePriors_agg_df.csv")
+
+```
+
+## KF Model definition using informative priors
+
+```{r eval=FALSE, warning=FALSE, message=FALSE, echo=FALSE}
+
+kf_ensemble <- "
+model {
+  # Model1 informative priors for kfar1guassJags_covariance_6.
+  theta_1[1,1] ~  dunif(theta_1_1.hyper.a, theta_1_1.hyper.b)
+  theta_1[1,2] <- 0
+  theta_1[2,1] <- 0
+  theta_1[2,2] ~  dunif(theta_2_2.hyper.a, theta_2_2.hyper.b)
+  
+  state.sigma[1] ~ dunif(state.sigma.1.a.hyper, state.sigma.1.b.hyper) 
+  state.sigma[2] ~ dunif(state.sigma.2.a.hyper, state.sigma.2.b.hyper)
+  obs.sigma[1] ~ dunif(obs.sigma.1.a.hyper, obs.sigma.1.b.hyper) 
+  obs.sigma[2] ~ dunif(obs.sigma.2.a.hyper, obs.sigma.2.b.hyper)
+  
+  state.rho ~ dunif(state.rho.a.hyper, state.rho.b.hyper)
+  obs.rho ~ dunif(obs.rho.a.hyper, obs.rho.b.hyper)
+  
+  state.cov[1,1] <- state.sigma[1] * state.sigma[1]
+  state.cov[1,2] <- state.sigma[1] * state.sigma[2] * state.rho
+  state.cov[2,1] <- state.sigma[1] * state.sigma[2] * state.rho
+  state.cov[2,2] <- state.sigma[2] * state.sigma[2]
+  state.prec[1:2,1:2] <- inverse(state.cov[,])
+  
+  obs.cov[1,1] <- obs.sigma[1] * obs.sigma[1]
+  obs.cov[1,2] <- obs.sigma[1] * obs.sigma[2] * obs.rho
+  obs.cov[2,1] <- obs.sigma[1] * obs.sigma[2] * obs.rho
+  obs.cov[2,2] <- obs.sigma[2] * obs.sigma[2]
+  obs.prec[1:2,1:2] <- inverse(obs.cov[,])
+  
+  ### state process equation
+  # 1st time step (based on a known value)
+  z[1,1] <- z1_init
+  z[1,2] <- z2_init
+  z11[1] <- z1_init
+  z21[1] <- z2_init
+  
+  p[1, 1, 1] <- p1_init
+  p[1, 1, 2] <- 1
+  p[1, 2, 1] <- 1
+  p[1, 2, 2] <- p2_init
+
+  #define 2*2 identity matrix
+  identity_matrix[1, 1] <- 1
+  identity_matrix[2, 2] <- 1
+  identity_matrix[1, 2] <- 0
+  identity_matrix[2, 1] <- 0
+  
+  # Model2 informative Priors for kfar1covguass_Jags4 model
+  # By assuming pho=0, this is a univariate KF for total lab test that doesn't depdend on positive cases. 
+  
+  theta2_1 ~  dunif(theta2_1.hyper.a, theta2_1.hyper.b)
+  
+  # #NEED TO CHECK THIS ASSIGNMENT VALUE
+  # inv.state.variance ~ dgamma(inv.state.variance.hyper.a, inv.state.variance.hyper.b) 
+  # inv.obs.variance.1  ~ dgamma(inv.obs.variance.1.hyper.a, inv.obs.variance.1.hyper.b)
+  # inv.obs.variance.2  ~ dgamma(inv.obs.variance.2.hyper.a, inv.obs.variance.2.hyper.b)
+  
+  inv.state.variance ~ dgamma(0.001, 0.001)
+  inv.obs.variance.1  ~ dgamma(0.001, 0.001)
+  
+  # Transform inv.variance to variance
+  state.variance <- 1/(inv.state.variance)
+  obs.variance.1 <- 1/(inv.obs.variance.1)
+
+  p12[1] <- p1_init
+  z12[1] <- z1_init
+  
+  # informative priors for ensemble weight
+  w1 ~  dunif(w1.hyper.a, w1.hyper.b)
+  z_ensemble[1] <- z1_init
+  inv.obs.variance.2  ~ dgamma(0.001, 0.001)
+  obs.variance.2 <- 1/(inv.obs.variance.2)
+  
+  # Remaining time steps
+  for(k in 2:TT){ #at the begining of time step t we wouldn't observe value for t but for t-1
+ 
+  # Model1 definition for kfar1guassJags_covariance_6
+    # compute kalman gain for the previous step becasue we would have observed t-1
+    kg[k-1, 1:2, 1:2] <- p[k-1, , ] %*% inverse(p[k-1, , ] + obs.cov[,])
+     
+    # update the predictions made for previous step, t-1, by kalman gain and observed value for t-1
+    z_update[k, 1:2] <- z[k-1, ] + c( t( kg[k-1, , ] %*% t(t(y[k-1,] - z[k-1,])) ) ) 
+    p_update[k, 1:2, 1:2] <- ( (identity_matrix[,] - kg[k-1, , ]) %*% p[k-1, , ] %*% 
+                             t((identity_matrix[,] - kg[k-1, , ])) )  + 
+                             (kg[k-1, , ] %*% obs.cov[,] %*% t(kg[k-1, , ]))
+    
+    # predict the current step, t, value using the updated previous step predictions
+    p[k, 1:2, 1:2] <- state.cov[,] + (theta_1[,] %*% p_update[k, , ] %*% t(theta_1[,]) )
+    mu[k,1:2] <- c( t( theta_1[,] %*% t(t(z_update[k,1:2])) ) )
+    z[k,1:2] ~ dmnorm( mu[k,1:2], inverse(p[k, 1:2, 1:2]) )
+    z11[k] <- z[k,1]
+    z21[k] <- z[k,2]
+    
+  # Model2 definition for kfar1covguass_Jags3
+    # compute kalman gain for the previous step becasue we would have observed t-1
+    k12[k-1] <- p12[k-1]/(p12[k-1] + obs.variance.1)
+    # k[t-1] <- p[t-1]/(p[t-1] + obs.variance)
+    
+    # update the predictions made for previous step, t-1, by kalman gain and observed value for t-1
+    z12_update[k] <- z12[k-1] + (k12[k-1] * (y12[k-1] - z12[k-1]))
+    p12_update[k] <- (1-k12[k-1])*p12[k-1] 
+    
+    # z_update[t] <- z[t-1] + (k[t-1]*(y[t-1] - z[t-1]))
+    # p_update[t] <- (1-k[t-1])*p[t-1]
+    
+    # predict the current step, t, value using the updated previous step predictions
+    p12[k] <- state.variance+(p12_update[k]*theta2_1^2)
+    z12[k] ~ dnorm(z12_update[k]*theta2_1, 1/p12[k])
+    
+    # p[t] <- state.variance+(p_update[t]*theta_1^2)
+    # z[t] ~ dnorm(z_update[t]*theta_1, 1/p[t])
+    
+  # weighted average from two models
+    z_ensemble[k] <- (w1*z11[k]) + ( (1-w1)*z12[k] )
+  }
+  
+  k12[TT] <- k12[TT-1]
+  kg[TT, 1:2, 1:2] <- kg[TT-1, 1:2, 1:2]
+  
+  # Observation equations
+  for(j in 1:TT) {
+    y[j,1:2] ~ dmnorm(z[j,1:2], inverse(obs.cov[,])) #model1
+    
+    y12[j] ~ dnorm(z12[j], 1/obs.variance.1) #model2
+    
+    yensemb[j] ~ dnorm(z_ensemble[j], 1/obs.variance.2) #ensemble model
+  }
+
+}"
+
+kf_ensem_predict_informPrior <- function(data, informPrior_df, 
+                                         dependent_var1="", dependent_var2="",
+                                         covar1 = "", 
+                                         test_Start, n, h, n_ahead, 
+                                         seasonalYear, last_id, 
+                                         modelname="kf_ensemble",
+                                         z0=0, nc=3, burn=1000, infer=10000){
+  
+  forecasted_values_df <- data.frame()
+  
+  prior_df <- informPrior_df %>%
+    filter(as.numeric(seasonal_Year) == seasonalYear & 
+             modelname == substr(model_name,1,nchar(model_name)-24)) # - 24 for no diff models
+  
+  theta_1_1.hyper.a <- prior_df$theta_1_1.hyper.a
+  theta_1_1.hyper.b <- prior_df$theta_1_1.hyper.b
+  theta_2_2.hyper.a <- prior_df$theta_2_2.hyper.a
+  theta_2_2.hyper.b <- prior_df$theta_2_2.hyper.b
+  theta2_1.hyper.a <- prior_df$theta2_1.hyper.a
+  theta2_1.hyper.b <- prior_df$theta2_1.hyper.b
+  
+  inv.state.variance.hyper.a <- prior_df$inv.state.variance.hyper.a
+  inv.state.variance.hyper.b <- prior_df$inv.state.variance.hyper.b
+  inv.obs.variance.1.hyper.a <- prior_df$inv.obs.variance.1.hyper.a
+  inv.obs.variance.1.hyper.b <- prior_df$inv.obs.variance.1.hyper.b
+  inv.obs.variance.2.hyper.a <- prior_df$inv.obs.variance.2.hyper.a
+  inv.obs.variance.2.hyper.b <- prior_df$inv.obs.variance.2.hyper.b
+  
+  state.sigma.1.a.hyper <- prior_df$state.sigma.1.a.hyper
+  state.sigma.1.b.hyper <- prior_df$state.sigma.1.b.hyper
+  obs.sigma.1.a.hyper <- prior_df$obs.sigma.1.a.hyper
+  obs.sigma.1.b.hyper <- prior_df$obs.sigma.1.b.hyper
+  state.sigma.2.a.hyper <- prior_df$state.sigma.2.a.hyper
+  state.sigma.2.b.hyper <- prior_df$state.sigma.2.b.hyper
+  obs.sigma.2.a.hyper <- prior_df$obs.sigma.2.a.hyper
+  obs.sigma.2.b.hyper <- prior_df$obs.sigma.2.b.hyper
+  obs.rho.a.hyper <- prior_df$obs.rho.a.hyper
+  obs.rho.b.hyper <- prior_df$obs.rho.b.hyper
+  state.rho.a.hyper <- prior_df$state.rho.a.hyper
+  state.rho.b.hyper <- prior_df$state.rho.b.hyper
+  
+  w1.hyper.a <- prior_df$w1.hyper.a
+  w1.hyper.b <- prior_df$w1.hyper.b
+  
+  for (i in test_Start:n) {
+    
+    print(paste(seasonalYear, modelname, i, sep=","))
+    
+    # Properly subset the time series
+    last_id <- last_id + 1 # id of the obs forecast begins. To align the forecast weeks with order week date in a seasonal year
+    #i=10
+    # subsetting the future cov values near boundary to avoid index out of bound error
+    if((i+n_ahead-1) > n){
+      end_index <- n-i
+    }else{
+      end_index <- 3
+    }
+    
+    col1 <- ts(data[1:(i-1), dependent_var1], start=1)
+    col1 <- c(col1, rep(NA, 1+end_index)) # adding NA for future periods
+    
+    col2 <- ts(data[1:(i-1), dependent_var2], start=1)
+    col2 <- c(col2, rep(NA, 1+end_index)) # adding NA for future periods
+    
+    # cov1 <- c(ts(data[1:(i+end_index), covar1], start=1))
+    # cov2 <- c(ts(data[1:(i+end_index), dependent_var1], start=1))
+    
+    # cov2 <- c(ts(data[, dependent_var1], start=1))
+    # cov1_future <- ts(data[i:(i+end_index), cov_var1], start=i)
+    # cov1 <- c(cov1, cov1_future)
+    
+    TT <- length(col1)
+    model <- get(noquote(modelname))
+    
+    dataar1Jags <- list(TT=TT,
+                        y=cbind(matrix(col1, nrow=length(col1)),
+                                matrix(col2, nrow=length(col2))), 
+                        y12=col1, yensemb=col1,
+                        #cov1=cov1, cov2=cov2, 
+                        z1_init=mean(col1, na.rm=TRUE), z2_init=mean(col2, na.rm=TRUE), 
+                        p1_init=10, p2_init=1,
+                        inv.state.variance.hyper.a=inv.state.variance.hyper.a,
+                        inv.state.variance.hyper.b=inv.state.variance.hyper.b,
+                        inv.obs.variance.1.hyper.a=inv.obs.variance.1.hyper.a,
+                        inv.obs.variance.1.hyper.b=inv.obs.variance.1.hyper.b,
+                        inv.obs.variance.2.hyper.a=inv.obs.variance.2.hyper.a,
+                        inv.obs.variance.2.hyper.b=inv.obs.variance.2.hyper.b,
+                        theta_1_1.hyper.a=theta_1_1.hyper.a, 
+                        theta_1_1.hyper.b=theta_1_1.hyper.b,
+                        theta_2_2.hyper.a=theta_2_2.hyper.a,
+                        theta_2_2.hyper.b=theta_2_2.hyper.b,
+                        theta2_1.hyper.a=theta2_1.hyper.a,
+                        theta2_1.hyper.b=theta2_1.hyper.b,
+                        state.sigma.1.a.hyper=state.sigma.1.a.hyper,
+                        state.sigma.1.b.hyper=state.sigma.1.b.hyper,
+                        state.sigma.2.a.hyper=state.sigma.2.a.hyper,
+                        state.sigma.2.b.hyper=state.sigma.2.b.hyper,
+                        obs.sigma.1.a.hyper=obs.sigma.1.a.hyper,
+                        obs.sigma.1.b.hyper=obs.sigma.1.b.hyper,
+                        obs.sigma.2.a.hyper=obs.sigma.2.a.hyper,
+                        obs.sigma.2.b.hyper=obs.sigma.2.b.hyper,
+                        obs.rho.a.hyper=obs.rho.a.hyper,
+                        obs.rho.b.hyper=obs.rho.b.hyper,
+                        state.rho.a.hyper=state.rho.a.hyper,
+                        state.rho.b.hyper=state.rho.b.hyper,
+                        w1.hyper.a=w1.hyper.a,
+                        w1.hyper.b=w1.hyper.b
+    )
+    
+    print(dataar1Jags)
+    ncar1Jags <- nc #no of chains
+    burnar1Jags <- burn
+    inferar1Jags <- infer
+    mar1Jags <- jags.model(file=textConnection(object=model),
+                           data=dataar1Jags,
+                           #inits=initval2pJags,
+                           n.chains=ncar1Jags)
+    
+    update(mar1Jags, n.iter=burnar1Jags)
+    
+    jagsar1VarM <- c("z11", "kg", "z21", "z12", "k12", "w1", "z_ensemble")
+
+    far1Jags <-  coda.samples(mar1Jags,
+                              variable.names=jagsar1VarM,
+                              n.iter=inferar1Jags)
+    
+    # print(summary(far1Jags))
+    
+    fit_total_vol_ensem <- summary(far1Jags[,paste0("z_ensemble[",1:TT,"]"),])$statistics[,"Mean"][i:(i+end_index)]
+    CI_total_vol_ensem <- data.frame(summary(far1Jags[,paste0("z_ensemble[",1:TT,"]"),])$quantiles[,c(1, 5)])[i:(i+end_index),]
+   
+    fit_total_vol_1 <- summary(far1Jags[,paste0("z11[",1:TT,"]"),])$statistics[,"Mean"][i:(i+end_index)]
+    CI_total_vol_1<- data.frame(summary(far1Jags[,paste0("z11[",1:TT,"]"),])$quantiles[,c(1, 5)])[i:(i+end_index),]
+    
+    fit_total_vol_2 <- summary(far1Jags[,paste0("z12[",1:TT,"]"),])$statistics[,"Mean"][i:(i+end_index)]
+    CI_total_vol_2<- data.frame(summary(far1Jags[,paste0("z12[",1:TT,"]"),])$quantiles[,c(1, 5)])[i:(i+end_index),]
+    
+    w1 <- unname(summary(far1Jags[,paste0("w1"),])$statistics["Mean"])
+
+    forecast <- setNames(data.frame(fit_total_vol_ensem, CI_total_vol_ensem, 
+                                    fit_total_vol_1, CI_total_vol_1,
+                                    fit_total_vol_2, CI_total_vol_2,
+                                    rep(w1, end_index+1),
+                                    rep(seasonalYear, end_index+1),
+                                    rep(i-1, end_index+1), rep(n, end_index+1),
+                                    seq(i, i+end_index),
+                                    rep(n_ahead, end_index+1)
+    ),
+    c("fit_total_vol_ensem", "lwr_total_vol_ensem", "upr_total_vol_ensem", 
+      "fit_total_vol_1", "lwr_total_vol_1", "upr_total_vol_1", 
+      "fit_total_vol_2", "lwr_total_vol_2", "upr_total_vol_2", 
+      "w1",
+      "seasonal_Year", "forecast_origin_id",
+      "last_obs_id", "id", "n_ahead")) 
+    
+    #### IMPORTANT comment the below line for difference models. 
+    forecast <- replace(forecast, forecast < 0, 0)
+    
+    rownames(forecast) <- NULL
+    forecasted_values_df <- rbind(forecasted_values_df, forecast)
+    
+  }
+  data.frame(forecasted_values_df)
+}
+
+```
+
+## Ensemble KF Rolling 4 Weeks ahead forecast using informative priors
+```{r eval=FALSE, warning=FALSE, message=FALSE, echo=FALSE}
+
+# kf_ensem_informativePriors_agg_df <- read.csv("simul_kf_ensem_informativePriors_agg_df.csv", header = T)
+
+set.seed(100)
+h=50 # forecast horizon. Change this to forecast for more weeks. 
+n_ahead <- 4 
+nc <- 3
+modelname <- c("kf_ensemble")
+var1 <- "total_vol"
+var2 <- "Detected"
+covar1 <- "smoothed_total_vol.fit"
+kf_multi_step_ensem_informPrior_forecast <- data.frame()
+for (m in modelname){
+  kf_multi_step_ensem_inforPrior_predict <- flu_data %>% 
+    filter(year %in% c(2019) & !week==53) %>%
+    group_by(year) %>% 
+    arrange(week) %>% 
+    mutate(n=n(), test_start = n - h + 1, h=h) %>% 
+    do(kf_ensem_predict_informPrior(., kf_ensem_informativePriors_agg_df, #priors model file
+                                    var1, var2, "covar1",
+                                    first(.$test_start), first(.$n), 
+                                    first(.$h), n_ahead,
+                                    first(.$year), 
+                                    last(.$week)-h, 
+                                    modelname=m,
+                                    z0=1, nc=3, burn=1000, infer=10000)
+    ) %>% 
+    mutate(forecast_step = id - forecast_origin_id,
+           model = m,
+           dep_var = "total_vol",
+           Prior = "informative"
+    )
+  
+  kf_multi_step_ensem_informPrior_forecast <- rbind(kf_multi_step_ensem_inforPrior_predict, 
+                                                    kf_multi_step_ensem_informPrior_forecast)
+  
+}  
+
+simul_kf_multi_step_ensem_informPrior_forecast_v2 <- inner_join(flu_data[c("year", "week",                                                                                                            "total_vol", "Detected")], 
+                                                               kf_multi_step_ensem_informPrior_forecast, 
+                                                               by = c("year" = "seasonal_Year", 
+                                                                      "week" = "id"))
+
+# setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+# write.csv(kf_multi_step_ensem_informPrior_forecast_v2,        file="simul_kf_multi_step_ensem_informPrior_forecast_v2.csv")
+```
+
+## Plot of KF Ensemble Model Total Cases Perfromance and Actual vs. Forecast
+```{r eval=TRUE, warning=FALSE, message=FALSE, echo=FALSE}
+
+# setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+
+# simul_kf_multi_step_ensem_informPrior_forecast_v2 <- read.csv("simul_kf_multi_step_ensem_informPrior_forecast_v2.csv", header = T)
+
+### plots of model performance metrics (MAD and % within CI)
+
+kf_multi_step_ensem_informPrior_forecast_metrics <- simul_kf_multi_step_ensem_informPrior_forecast_v2 %>%
+  filter(week>4) %>% 
+  group_by(year, dep_var, forecast_step, model) %>% 
+  mutate(res_total_vol = total_vol-fit_total_vol_ensem, 
+         #res_Detected = Detected-fit_Detected,
+         total_vol_within_CI = ifelse((total_vol>=lwr_total_vol_ensem & total_vol<=upr_total_vol_ensem),1,0) 
+         #,Detected_within_CI = ifelse((Detected>=lwr_Detected & Detected<=upr_Detected),1,0)
+        ) %>% 
+  summarize(MAD_total_vol = mean(abs(res_total_vol)),
+            #MAD_Detected = mean(abs(res_Detected)),
+            percent_total_vol_within_CI = mean(total_vol_within_CI)
+            #,percent_Detected_within_CI = mean(Detected_within_CI)
+            )
+
+kf_ensem_informPrior_forecast_stats <- kf_multi_step_ensem_informPrior_forecast_metrics %>%
+  group_by(dep_var, forecast_step, model) %>% 
+  summarize(mean_MAD_total_vol = mean(MAD_total_vol),
+            median_MAD_total_vol = median(MAD_total_vol),
+            #mean_MAD_Detected = mean(MAD_Detected),
+            #median_MAD_Detected = median(MAD_Detected),
+            mean_percent_total_vol_within_CI = mean(percent_total_vol_within_CI),
+            median_percent_total_vol_within_CI = median(percent_total_vol_within_CI)
+            #,mean_percent_Detected_within_CI = mean(percent_Detected_within_CI),
+            #median_percent_Detected_within_CI = median(percent_Detected_within_CI)
+            )
+
+kf_multi_step_ensem_informPrior_forecast_metrics %>% 
+  ggplot(data=., aes(x=as.factor(forecast_step), y=MAD_total_vol, color=model)) +
+  geom_boxplot() +
+  facet_wrap(vars(dep_var), scales = 'free', nrow = 2) +
+  ggtitle("KF Bayesian Ensemble Total_Vol KF with informative prior performance Metrics") +
+  geom_text(data=kf_ensem_informPrior_forecast_stats, aes(as.factor(forecast_step), 
+                                                        round(median_MAD_total_vol), label = round(median_MAD_total_vol)), 
+              position = position_dodge(width = 0.75), size = 2.5, vjust = -0.5)+
+  xlab("No. of Weeks ahead Forecast") + ylab("Mean Abosulte Deviation")+
+  #ylim(0, 1000)+
+  theme(legend.position="bottom")+
+  guides(colour = guide_legend(nrow = 2))
+
+
+kf_multi_step_ensem_informPrior_forecast_metrics %>% 
+  ggplot(data=., aes(x=as.factor(forecast_step), y=percent_total_vol_within_CI, color=model)) +
+  geom_boxplot() +
+  facet_wrap(vars(dep_var), scales = 'free', nrow = 2) +
+  ggtitle("KF Bayesian Ensemble Total_Vol KF with informative prior performance Metrics") +
+  geom_text(data=kf_ensem_informPrior_forecast_stats, aes(as.factor(forecast_step), 
+                                                        round(median_percent_total_vol_within_CI,2), 
+                                                        label= round(median_percent_total_vol_within_CI,2)), 
+              position = position_dodge(width = 0.75), size = 2.5, vjust = -0.5)+
+  xlab("No. of Weeks ahead Forecast") + ylab("Percent of Actuals with in Prediction Interval")+
+  theme(legend.position="bottom")+
+  guides(colour = guide_legend(nrow = 2))
+
+### plots of actual vs forecast
+jags_model_filter <- c("kf_ensemble")
+for (var in c("total_vol")){
+  
+  plot_1 <-  simul_kf_multi_step_ensem_informPrior_forecast_v2 %>% 
+    filter( year %in% years 
+           & model %in% jags_model_filter & week >=6) %>% 
+  do(plots = ggplot(data=., aes(x=week, y=.data[[var]])) + 
+    geom_point(aes(colour="Actual"), size=1) +
+    geom_line(aes(x=week, y=.data[[paste("fit_", var, "_ensem", sep="")]], colour="Predict"), size=0.8) +
+    geom_ribbon(aes(ymin = .data[[paste("lwr_", var, "_ensem", sep="")]], 
+                    ymax = .data[[paste("upr_", var, "_ensem", sep="")]]), alpha = 0.4)+
+    scale_colour_manual("", values = c("red", "blue")) +
+    scale_fill_manual("", values = c("red", "blue")) +
+    facet_grid(year~forecast_step,scales = "free_y",
+               space = "fixed", shrink = TRUE,
+               labeller = "label_value", as.table = TRUE, drop = TRUE) +
+    theme(legend.position = "bottom")+
+    ggtitle(paste(unique(.$dep_var), unique(.$model), sep="+"))
+    )
+  
+  print(plot_1$plots)
+  
+}
+```
+
+# KF Model for Postive Cases
+
+## Extracting Bivariate KF Diff historical  priors
+```{r eval=FALSE, warning=FALSE, message=FALSE, echo=FALSE}
+
+bivar_kfar1gaussJags8_2_extractInformativePrior <- "
+model {
+   ### non informative SD for observation and state Priors
+   # non informative Priors
+    for (i in 1:4) {
+      theta_1[i] ~  dunif(-1, 1)
+    }
+  
+   inv.state.variance.1 ~ dgamma(0.001, 0.001)
+   inv.obs.variance.1  ~ dgamma(0.001, 0.001)
+   inv.state.variance.2 ~ dgamma(0.001, 0.001)
+   inv.obs.variance.2  ~ dgamma(0.001, 0.001)
+   
+   # Transform inv.precision to variance
+   state.variance.1 <- 1/(inv.state.variance.1)
+   obs.variance.1 <- 1/(inv.obs.variance.1)
+   state.variance.2 <- 1/(inv.state.variance.2)
+   obs.variance.2 <- 1/(inv.obs.variance.2)
+   
+   ### state process equation
+   # 1st time step (based on known value)
+   z1[1] <- z1_init
+   z2[1] <- z2_init
+   p1[1] <- p1_init
+   p2[1] <- p2_init   
+   
+  # Remaining time steps
+  for(t in 2:TT){ #at the begining of time step t we wouldn't observe value for t but for t-1
+  
+    # compute kalman gain for the previous step becasue we would have observed t-1
+    k1[t-1] <- p1[t-1]/(p1[t-1] + obs.variance.1)
+    k2[t-1] <- p2[t-1]/(p2[t-1] + obs.variance.2)
+     
+    # update the predictions made for previous step, t-1, by kalman gain and observed value for t-1
+    z1_update[t] <- z1[t-1] + (k1[t-1]*(y[t-1,1] - z1[t-1]))
+    p1_update[t] <- (1-k1[t-1])*p1[t-1]
+    
+    z2_update[t] <- z2[t-1] + (k2[t-1]*(y[t-1,2] - z2[t-1]))
+    p2_update[t] <- (1-k2[t-1])*p2[t-1]
+    
+    # predict the current step, t, value using the updated previous step predictions
+    p1[t] <- state.variance.1 + (p1_update[t]*theta_1[1]^2) + (p2_update[t]*theta_1[2]^2)
+    z1[t] ~ dnorm(z1_update[t]*theta_1[1] + z2_update[t]*theta_1[2], 1/p1[t])
+    
+    p2[t] <- state.variance.2 + (p2_update[t]*theta_1[4]^2)
+    z2[t] ~ dnorm(cov1[t]*theta_1[3] + z2_update[t]*theta_1[4], 1/p2[t])
+    
+  }
+  
+  k1[TT] <- k1[TT-1]
+  k2[TT] <- k2[TT-1]
+  
+  # Observation equations
+  for(t in 1:TT) {
+    y[t,1] ~ dnorm(z1[t], 1/obs.variance.1)
+    y[t,2] ~ dnorm(z2[t], 1/obs.variance.2)
+  }
+  
+}"
+
+kf_bivar_diff_extractinformativePriors <- function(data, dependent_var1="", 
+                                            dependent_var2="",
+                                            covar1 = "",
+                                            seasonalYear,
+                                            model_name="bivar_kfar1gaussJags8_2_extractInformativePrior",
+                                            nc=3, burn=1000, infer=10000){
+  # forecasted_values <- matrix(0, h, 2)
+  print(paste(seasonalYear, model_name, sep=","))
+  estimated_values_df <- data.frame()
+  
+  col1 <- c(ts(data[, dependent_var1], start=1))
+  col2 <- c(ts(data[, dependent_var2], start=1))
+  cov1 <- c(ts(data[, covar1], start=1))
+  cov2 <- c(ts(data[, dependent_var1], start=1))
+
+  TT <- length(col1)
+  y=cbind(matrix(col1, nrow=length(col1)),
+          matrix(col2, nrow=length(col2)))
+  
+  dataar1Jags <- list(TT=TT, y=y, cov1=cov1, cov2=cov2, 
+                      z1_init=col1[1], z2_init=col2[1], 
+                      p1_init=10, p2_init=1)
+  ncar1Jags <- nc #no of chains
+  burnar1Jags <- burn
+  inferar1Jags <- infer
+  # print(dataar1Jags)
+  model <- get(noquote(model_name))
+  mar1Jags <- jags.model(file=textConnection(object=model),
+                         data=dataar1Jags,
+                         n.chains=ncar1Jags)
+  
+  update(mar1Jags, n.iter=burnar1Jags)
+  
+  jagsar1VarM <- c("theta_1",  
+                     "inv.state.variance.1", "inv.obs.variance.1", 
+                     "inv.state.variance.2", "inv.obs.variance.2"
+                     # ,"z1", "p1", "k1", "z2", "p2", "k2"
+                     )
+
+  far1Jags <- coda.samples(mar1Jags,
+                           variable.names=jagsar1VarM,
+                           n.iter=inferar1Jags)
+  
+
+    theta_1_1_fit_mean <- unname(summary(far1Jags[,paste0("theta_1[1]"),])$statistics["Mean"])
+    theta_1_2_fit_mean <- unname(summary(far1Jags[,paste0("theta_1[2]"),])$statistics["Mean"])
+    theta_2_1_fit_mean <- unname(summary(far1Jags[,paste0("theta_1[3]"),])$statistics["Mean"])
+    theta_2_2_fit_mean <- unname(summary(far1Jags[,paste0("theta_1[4]"),])$statistics["Mean"])
+    
+    inv.state.variance.1_fit <-  unname(summary(far1Jags[,paste0("inv.state.variance.1"),])$statistics["Mean"])
+    inv.obs.variance.1_fit<- unname(summary(far1Jags[,paste0("inv.obs.variance.1"),])$statistics["Mean"])
+    inv.state.variance.2_fit <- unname(summary(far1Jags[,paste0("inv.state.variance.2"),])$statistics["Mean"])
+    inv.obs.variance.2_fit<- unname(summary(far1Jags[,paste0("inv.obs.variance.2"),])$statistics["Mean"])
+    
+    estimate <- setNames(data.frame(theta_1_1_fit_mean, theta_1_2_fit_mean, 
+                                    NA,
+                                    theta_2_1_fit_mean, theta_2_2_fit_mean, 
+                                    NA,
+                                    inv.state.variance.1_fit, inv.obs.variance.1_fit,
+                                    inv.state.variance.2_fit, inv.obs.variance.2_fit,
+                                    seasonalYear, model_name),
+                                 c("theta_1_1_fit_mean", "theta_1_2_fit_mean", 
+                                   "theta_1_3_fit_mean",
+                                   "theta_2_1_fit_mean", "theta_2_2_fit_mean",
+                                   "theta_2_3_fit_mean",
+                                   "inv.state.variance.1_fit", "inv.obs.variance.1_fit",
+                                   "inv.state.variance.2_fit", "inv.obs.variance.2_fit",
+                                   "seasonal_Year", "model_name")) 
+
+  
+  rownames(forecast) <- NULL
+  estimated_values_df <- rbind(estimated_values_df, estimate)
+  
+  data.frame(estimated_values_df)
+}
+
+simul_kf_bivar_diff_informativePriors_jags_df <- data.frame()
+for(model in c("bivar_kfar1gaussJags8_2_extractInformativePrior")){
+
+  kf_bivar_informativePrior_jags_predict <- flu_data %>% 
+    filter(year %in% c(2016:2019)) %>%
+    group_by(year) %>% 
+    arrange(week) %>% 
+    do(kf_bivar_diff_extractinformativePriors(., "total_vol", "Detected",
+                                       covar1 <- "diff_smoothed_total_vol.fit",
+                                       first(.$year), 
+                                       model_name=model,
+                                       nc=3, burn=1000, 
+                                       infer=10000
+    )
+    ) 
+  simul_kf_bivar_diff_informativePriors_jags_df <- rbind(simul_kf_bivar_diff_informativePriors_jags_df, 
+                                              kf_bivar_informativePrior_jags_predict)
+}
+
+# write the df to save time next time
+# write.csv(simul_kf_bivar_diff_informativePriors_jags_df, file="simul_kf_bivar_diff_informativePriors_jags_df.csv")
+
+# kf_bivar_informativePriors_jags_df <- read.csv("kf_bivar_informativePriors_jags_df.csv", header = T)
+
+simul_kf_bivar_diff_informativePriors_agg_df <- data.frame()
+for(sy in c(2016:2019)){
+  kf_bivar_informativePriors_agg <- simul_kf_bivar_diff_informativePriors_jags_df %>% 
+    filter(seasonal_Year != sy) %>% 
+    group_by(model_name) %>% 
+    summarise(across(
+      .cols = where(is.numeric), 
+      .fns = list(Mean = mean, SD = sd), na.rm = TRUE, 
+      .names = "{col}_{fn}")) %>% 
+    mutate(seasonal_Year = sy)   
+  
+  simul_kf_bivar_diff_informativePriors_agg_df <- rbind(simul_kf_bivar_diff_informativePriors_agg_df, 
+                                             kf_bivar_informativePriors_agg)
+} 
+
+# https://www.youtube.com/watch?app=desktop&v=DN8ZoLKH6Nw
+simul_kf_bivar_diff_informativePriors_agg_df <- simul_kf_bivar_diff_informativePriors_agg_df %>% 
+                                mutate(
+                                  inv.state.variance.1.hyper.b = inv.state.variance.1_fit_Mean/inv.state.variance.1_fit_SD^2,
+                                  inv.state.variance.1.hyper.a = inv.state.variance.1.hyper.b*inv.state.variance.1_fit_Mean,
+                                  inv.obs.variance.1.hyper.b = inv.obs.variance.1_fit_Mean/(inv.obs.variance.1_fit_SD^2),
+                                  inv.obs.variance.1.hyper.a = inv.obs.variance.1.hyper.b*inv.obs.variance.1_fit_Mean,
+                                  
+                                  inv.state.variance.2.hyper.b = inv.state.variance.2_fit_Mean/inv.state.variance.2_fit_SD^2,
+                                  inv.state.variance.2.hyper.a = inv.state.variance.2.hyper.b*inv.state.variance.2_fit_Mean,
+                                  inv.obs.variance.2.hyper.b = inv.obs.variance.2_fit_Mean/(inv.obs.variance.2_fit_SD^2),
+                                  inv.obs.variance.2.hyper.a = inv.obs.variance.2.hyper.b*inv.obs.variance.2_fit_Mean
+                                  ) 
+
+# setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+# write.csv(simul_kf_bivar_diff_informativePriors_agg_df, file="simul_kf_bivar_diff_informativePriors_agg_df.csv")
+```
+
+## Bivariate KF Diff Model definition using informative priors
+```{r eval=FALSE, warning=FALSE, message=FALSE, echo=FALSE}
+
+bivar_kfar1gaussJags8_2 <- "
+model {
+   # informative Priors
+    for (i in 1:4) {
+      theta_1.precision.hyper[i] <- 1/(theta_1.sd.hyper[i]*theta_1.sd.hyper[i])
+      theta_1[i] ~  dnorm(theta_1.mean.hyper[i], theta_1.precision.hyper[i])
+    }
+  
+   inv.state.variance.1 ~ dgamma(inv.state.variance.1.hyper.a, 
+                                 inv.state.variance.1.hyper.b)
+   inv.obs.variance.1  ~ dgamma(inv.obs.variance.1.hyper.a, 
+                                inv.obs.variance.1.hyper.b)
+   inv.state.variance.2 ~ dgamma(inv.state.variance.2.hyper.a, 
+                                 inv.state.variance.2.hyper.b)
+   inv.obs.variance.2  ~ dgamma(inv.obs.variance.2.hyper.a, 
+                                inv.obs.variance.2.hyper.b)
+                                
+   # Transform inv.precision to variance
+   state.variance.1 <- 1/(inv.state.variance.1)
+   obs.variance.1 <- 1/(inv.obs.variance.1)
+   state.variance.2 <- 1/(inv.state.variance.2)
+   obs.variance.2 <- 1/(inv.obs.variance.2)
+   
+   ### state process equation
+   # 1st time step (based on known value)
+   z1[1] <- z1_init
+   z2[1] <- z2_init
+   p1[1] <- p1_init
+   p2[1] <- p2_init   
+   
+  # Remaining time steps
+  for(t in 2:TT){ #at the begining of time step t we wouldn't observe value for t but for t-1
+  
+    # compute kalman gain for the previous step becasue we would have observed t-1
+    k1[t-1] <- p1[t-1]/(p1[t-1] + obs.variance.1)
+    k2[t-1] <- p2[t-1]/(p2[t-1] + obs.variance.2)
+     
+    # update the predictions made for previous step, t-1, by kalman gain and observed value for t-1
+    z1_update[t] <- z1[t-1] + (k1[t-1]*(y[t-1,1] - z1[t-1]))
+    p1_update[t] <- (1-k1[t-1])*p1[t-1]
+    
+    z2_update[t] <- z2[t-1] + (k2[t-1]*(y[t-1,2] - z2[t-1]))
+    p2_update[t] <- (1-k2[t-1])*p2[t-1]
+    
+    # predict the current step, t, value using the updated previous step predictions
+    p1[t] <- state.variance.1 + (p1_update[t]*theta_1[1]^2) + (p2_update[t]*theta_1[2]^2)
+    z1[t] ~ dnorm(z1_update[t]*theta_1[1] + z2_update[t]*theta_1[2], 1/p1[t])
+    
+    p2[t] <- state.variance.2 + (p2_update[t]*theta_1[4]^2)
+    z2[t] ~ dnorm(cov1[t]*theta_1[3] + z2_update[t]*theta_1[4], 1/p2[t])
+    
+  }
+  
+  k1[TT] <- k1[TT-1]
+  k2[TT] <- k2[TT-1]
+  
+  # Observation equations
+  for(t in 1:TT) {
+    y[t,1] ~ dnorm(z1[t], 1/obs.variance.1)
+    y[t,2] ~ dnorm(z2[t], 1/obs.variance.2)
+  }
+  
+}"
+
+kf_bivar_predict_informPrior <- function(data, informPrior_df, 
+                                         dependent_var1="", dependent_var2="",
+                                         covar1 = "", 
+                                         test_Start, n, h, n_ahead, 
+                                         seasonalYear, last_id, 
+                                         modelname="bivar_kfar1gaussJags8_2",
+                                         z0=0, nc=3, burn=1000, infer=10000){
+  
+  forecasted_values_df <- data.frame()
+  
+  prior_df <- informPrior_df %>%
+    filter(as.numeric(seasonal_Year) == seasonalYear & 
+             modelname == substr(model_name,1,nchar(model_name)-24))
+  
+  theta_1.mean.hyper <- c(prior_df$theta_1_1_fit_mean_Mean, prior_df$theta_1_2_fit_mean_Mean,
+                          prior_df$theta_2_1_fit_mean_Mean, prior_df$theta_2_2_fit_mean_Mean
+                          )
+  
+  theta_1.sd.hyper <- c(prior_df$theta_1_1_fit_mean_SD, prior_df$theta_1_2_fit_mean_SD,
+                        prior_df$theta_2_1_fit_mean_SD, prior_df$theta_2_2_fit_mean_SD)
+  
+  inv.state.variance.1.hyper.a <- prior_df$inv.state.variance.1.hyper.a
+  inv.state.variance.1.hyper.b <- prior_df$inv.state.variance.1.hyper.b
+  inv.obs.variance.1.hyper.a <- prior_df$inv.obs.variance.1.hyper.a
+  inv.obs.variance.1.hyper.b <- prior_df$inv.obs.variance.1.hyper.b
+  
+  inv.state.variance.2.hyper.a <- prior_df$inv.state.variance.2.hyper.a
+  inv.state.variance.2.hyper.b <- prior_df$inv.state.variance.2.hyper.b
+  inv.obs.variance.2.hyper.a <- prior_df$inv.obs.variance.2.hyper.a
+  inv.obs.variance.2.hyper.b <- prior_df$inv.obs.variance.2.hyper.b
+  
+  # state.sigma.1.a.hyper <- prior_df$state.sigma.1.a.hyper
+  # state.sigma.1.b.hyper <- prior_df$state.sigma.1.b.hyper
+  # obs.sigma.1.a.hyper <- prior_df$obs.sigma.1.a.hyper
+  # obs.sigma.1.b.hyper <- prior_df$obs.sigma.1.b.hyper
+  # state.sigma.2.a.hyper <- prior_df$state.sigma.2.a.hyper
+  # state.sigma.2.b.hyper <- prior_df$state.sigma.2.b.hyper
+  # obs.sigma.2.a.hyper <- prior_df$obs.sigma.2.a.hyper
+  # obs.sigma.2.b.hyper <- prior_df$obs.sigma.2.b.hyper
+  # obs.rho.a.hyper <- prior_df$obs.rho.a.hyper
+  # obs.rho.b.hyper <- prior_df$obs.rho.b.hyper
+  # state.rho.a.hyper <- prior_df$state.rho.a.hyper
+  # state.rho.b.hyper <- prior_df$state.rho.b.hyper
+  
+  for (i in test_Start:n) {
+    
+    print(paste(seasonalYear, modelname, i, sep=","))
+    
+    # Properly subset the time series
+    last_id <- last_id + 1 # id of the obs forecast begins. To align the forecast weeks with order week date in a seasonal year
+    #i=10
+    # subsetting the future cov values near boundary to avoid index out of bound error
+    if((i+n_ahead-1) > n){
+      end_index <- n-i
+    }else{
+      end_index <- 3
+    }
+    
+    col1 <- ts(data[1:(i-1), dependent_var1], start=1)
+    col1 <- c(col1, rep(NA, 1+end_index)) # adding NA for future periods
+    
+    col2 <- ts(data[1:(i-1), dependent_var2], start=1)
+    col2 <- c(col2, rep(NA, 1+end_index)) # adding NA for future periods
+    
+    cov1 <- c(ts(data[1:(i+end_index), covar1], start=1))
+    cov2 <- c(ts(data[1:(i+end_index), dependent_var1], start=1))
+    
+    TT <- length(col1)
+    model <- get(noquote(modelname))
+    
+    dataar1Jags <- list(TT=TT,
+                        y=cbind(matrix(col1, nrow=length(col1)),
+                                matrix(col2, nrow=length(col2))), 
+                        inv.state.variance.1.hyper.a=inv.state.variance.1.hyper.a,
+                        inv.state.variance.1.hyper.b=inv.state.variance.1.hyper.b,
+                        inv.obs.variance.1.hyper.a=inv.obs.variance.1.hyper.a,
+                        inv.obs.variance.1.hyper.b=inv.obs.variance.1.hyper.b,
+                        inv.state.variance.2.hyper.a=inv.state.variance.2.hyper.a,
+                        inv.state.variance.2.hyper.b=inv.state.variance.2.hyper.b,
+                        inv.obs.variance.2.hyper.a=inv.obs.variance.2.hyper.a,
+                        inv.obs.variance.2.hyper.b=inv.obs.variance.2.hyper.b,
+                        theta_1.mean.hyper=theta_1.mean.hyper, 
+                        theta_1.sd.hyper=theta_1.sd.hyper,
+                        # state.sigma.1.a.hyper=state.sigma.1.a.hyper,
+                        # state.sigma.1.b.hyper=state.sigma.1.b.hyper,
+                        # state.sigma.2.a.hyper=state.sigma.2.a.hyper,
+                        # state.sigma.2.b.hyper=state.sigma.2.b.hyper,
+                        # obs.sigma.1.a.hyper=obs.sigma.1.a.hyper,
+                        # obs.sigma.1.b.hyper=obs.sigma.1.b.hyper,
+                        # obs.sigma.2.a.hyper=obs.sigma.2.a.hyper,
+                        # obs.sigma.2.b.hyper=obs.sigma.2.b.hyper,
+                        # obs.rho.a.hyper=obs.rho.a.hyper,
+                        # obs.rho.b.hyper=obs.rho.b.hyper,
+                        # state.rho.a.hyper=state.rho.a.hyper,
+                        # state.rho.b.hyper=state.rho.b.hyper,
+                        cov1=cov1, cov2=cov2, 
+                        z1_init=10, z2_init=1, 
+                        p1_init=10, p2_init=1
+                        )
+    
+    print(dataar1Jags)
+    ncar1Jags <- nc #no of chains
+    burnar1Jags <- burn
+    inferar1Jags <- infer
+    mar1Jags <- jags.model(file=textConnection(object=model),
+                           data=dataar1Jags,
+                           #inits=initval2pJags,
+                           n.chains=ncar1Jags)
+    
+    update(mar1Jags, n.iter=burnar1Jags)
+    
+
+    jagsar1VarM <- c("z1", "p1", "k1", "z2", "p2", "k2")
+
+    far1Jags <-  coda.samples(mar1Jags,
+                              variable.names=jagsar1VarM,
+                              n.iter=inferar1Jags)
+    
+    # print(summary(far1Jags))
+    
+    fit_total_vol <- summary(far1Jags[,paste0("z1[",1:TT,"]"),])$statistics[,"Mean"][i:(i+end_index)]
+    fit_Detected <- summary(far1Jags[,paste0("z2[",1:TT,"]"),])$statistics[,"Mean"][i:(i+end_index)]
+    CI_total_vol <- data.frame(summary(far1Jags[,paste0("z1[",1:TT,"]"),])$quantiles[,c(1, 5)])[i:(i+end_index),]
+    CI_Detected <- data.frame(summary(far1Jags[,paste0("z2[",1:TT,"]"),])$quantiles[,c(1, 5)])[i:(i+end_index),]
+    
+
+    Kalman_gain_total_vol <- unname(summary(far1Jags[,paste0("k1[",1:TT,"]"),])$statistics[,"Mean"][i:(i+end_index)])
+    Kalman_gain_Detected <- unname(summary(far1Jags[,paste0("k2[",1:TT,"]"),])$statistics[,"Mean"][i:(i+end_index)])
+
+    forecast <- setNames(data.frame(fit_total_vol, CI_total_vol, Kalman_gain_total_vol,
+                                    fit_Detected, CI_Detected, Kalman_gain_Detected,
+                                    rep(seasonalYear, end_index+1),
+                                    rep(i-1, end_index+1), rep(n, end_index+1),
+                                    seq(i, i+end_index),
+                                    rep(n_ahead, end_index+1)
+    ),
+    c("fit_total_vol", "lwr_total_vol", "upr_total_vol", "Kalman_gain_total_vol",
+      "fit_Detected", "lwr_Detected", "upr_Detected", "Kalman_gain_Detected",
+      "seasonal_Year", "forecast_origin_id",
+      "last_obs_id", "id", "n_ahead")) 
+    
+    forecast <- replace(forecast, forecast < 0, 0)
+    rownames(forecast) <- NULL
+    forecasted_values_df <- rbind(forecasted_values_df, forecast)
+    
+  }
+  data.frame(forecasted_values_df)
+}
+
+```
+
+## cross validation of KF diff using informative priors
+```{r eval=FALSE, warning=FALSE, message=FALSE, echo=FALSE}
+# simul_kf_bivar_diff_informativePriors_agg_df <- read.csv("simul_kf_bivar_diff_informativePriors_agg_df.csv", header = T)
+
+flu_data <- flu_data <- flu_data %>%
+  arrange(year, week) %>%
+  mutate(lag_total_vol = lag(total_vol),
+         lag_Detected = lag(Detected),
+         diff_total_vol = c(NA, diff(total_vol)),
+         diff_Detected = c(NA, diff(Detected)))
+
+set.seed(100)
+h=50 # forecast horizon
+n_ahead <- 4
+nc <- 3
+modelname <- c("bivar_kfar1gaussJags8_2")
+var1 <- "diff_total_vol"
+var2 <- "diff_Detected"
+covar1 <- "diff_smoothed_total_vol.fit"
+simul_kf_multi_step_diff_bivar_informPrior_forecast <- data.frame()
+for (m in modelname){
+  kf_multi_step_bivar_inforPrior_predict <- flu_data %>% 
+    filter(year %in% c(2019) ) %>%
+    group_by(year) %>% 
+    arrange(week) %>% 
+    mutate(n=n(), test_start = n - h + 1, h=h) %>% 
+    do(kf_bivar_predict_informPrior(., simul_kf_bivar_diff_informativePriors_agg_df,
+                                    var1, var2, covar1,
+                                    first(.$test_start), first(.$n), 
+                                    first(.$h), n_ahead,
+                                    first(.$year), 
+                                    last(.$week)-h, 
+                                    modelname=m,
+                                    z0=1, nc=3, burn=1000, infer=10000)
+    ) %>% 
+    mutate(forecast_step = id - forecast_origin_id,
+           model = m,
+           dep_var = "bivar",
+           Prior = "informative"
+    )
+  
+  simul_kf_multi_step_diff_bivar_informPrior_forecast <- rbind(kf_multi_step_bivar_inforPrior_predict, 
+                                                    simul_kf_multi_step_diff_bivar_informPrior_forecast)
+  
+}  
+
+simul_kf_multi_step_diff_bivar_informPrior_forecast_v2 <- inner_join(flu_data[c("year", "week", 
+                                                                                "total_vol", "Detected", 
+                                                                                "diff_total_vol", "diff_Detected",
+                                                                                "lag_total_vol", "lag_Detected")], 
+                                                          simul_kf_multi_step_diff_bivar_informPrior_forecast, 
+                                                          by = c("year" = "year", 
+                                                                 "week" = "id"))
+
+### IMPORTANT below code is only for diff models. Undo difference to get estimate in original scale.
+simul_kf_multi_step_diff_bivar_informPrior_forecast_v3 <- simul_kf_multi_step_diff_bivar_informPrior_forecast_v2 %>%  arrange(year, week) %>% 
+  mutate(diff_fit_total_vol = fit_total_vol,
+         diff_lwr_total_vol = lwr_total_vol,
+         diff_upr_total_vol = upr_total_vol,
+         diff_fit_Detected = fit_Detected,
+         diff_lwr_Detected = lwr_Detected,
+         diff_upr_Detected = upr_Detected,
+         model = paste(model, "diff", sep="_"),
+         
+         fit_total_vol_new = ifelse(forecast_step==1,diff_fit_total_vol+lag_total_vol,NA),
+         lwr_total_vol_new = ifelse(forecast_step==1,diff_lwr_total_vol+lag_total_vol,NA),
+         upr_total_vol_new = ifelse(forecast_step==1,diff_upr_total_vol+lag_total_vol,NA),
+         
+         fit_Detected_new = ifelse(forecast_step==1,diff_fit_Detected+lag_Detected,NA),
+         lwr_Detected_new = ifelse(forecast_step==1,diff_lwr_Detected+lag_Detected,NA),
+         upr_Detected_new = ifelse(forecast_step==1,diff_upr_Detected+lag_Detected,NA)
+         ) %>% 
+  mutate(fit_total_vol_new = ifelse(forecast_step==2,
+                                    lag(fit_total_vol_new)+diff_fit_total_vol, fit_total_vol_new),
+         lwr_total_vol_new = ifelse(forecast_step==2,
+                                    lag(lwr_total_vol_new)+diff_lwr_total_vol, lwr_total_vol_new),
+         upr_total_vol_new = ifelse(forecast_step==2,
+                                    lag(upr_total_vol_new)+diff_upr_total_vol, upr_total_vol_new),
+         
+         fit_Detected_new = ifelse(forecast_step==2,
+                                    lag(fit_Detected_new)+diff_fit_Detected, fit_Detected_new),
+         lwr_Detected_new = ifelse(forecast_step==2,
+                                    lag(lwr_Detected_new)+diff_lwr_Detected, lwr_Detected_new),
+         upr_Detected_new = ifelse(forecast_step==2,
+                                    lag(upr_Detected_new)+diff_upr_Detected, upr_Detected_new)
+        )%>% 
+  mutate(fit_total_vol_new = ifelse(forecast_step==3,
+                                    lag(fit_total_vol_new)+diff_fit_total_vol, fit_total_vol_new),
+         lwr_total_vol_new = ifelse(forecast_step==3,
+                                    lag(lwr_total_vol_new)+diff_lwr_total_vol, lwr_total_vol_new),
+         upr_total_vol_new = ifelse(forecast_step==3,
+                                    lag(upr_total_vol_new)+diff_upr_total_vol, upr_total_vol_new),
+         
+         fit_Detected_new = ifelse(forecast_step==3,
+                                   lag(fit_Detected_new)+diff_fit_Detected, fit_Detected_new),
+         lwr_Detected_new = ifelse(forecast_step==3,
+                                   lag(lwr_Detected_new)+diff_lwr_Detected, lwr_Detected_new),
+         upr_Detected_new = ifelse(forecast_step==3,
+                                   lag(upr_Detected_new)+diff_upr_Detected, upr_Detected_new)
+  )%>% 
+  mutate(fit_total_vol_new = ifelse(forecast_step==4,
+                                    lag(fit_total_vol_new)+diff_fit_total_vol, fit_total_vol_new),
+         lwr_total_vol_new = ifelse(forecast_step==4,
+                                    lag(lwr_total_vol_new)+diff_lwr_total_vol, lwr_total_vol_new),
+         upr_total_vol_new = ifelse(forecast_step==4,
+                                    lag(upr_total_vol_new)+diff_upr_total_vol, upr_total_vol_new),
+         
+         fit_Detected_new = ifelse(forecast_step==4,
+                                   lag(fit_Detected_new)+diff_fit_Detected, fit_Detected_new),
+         lwr_Detected_new = ifelse(forecast_step==4,
+                                   lag(lwr_Detected_new)+diff_lwr_Detected, lwr_Detected_new),
+         upr_Detected_new = ifelse(forecast_step==4,
+                                   lag(upr_Detected_new)+diff_upr_Detected, upr_Detected_new)
+  )
+
+#If estimate < 0 then make it 0
+simul_kf_multi_step_diff_bivar_informPrior_forecast_v4 <- replace(simul_kf_multi_step_diff_bivar_informPrior_forecast_v3,
+                                                            simul_kf_multi_step_diff_bivar_informPrior_forecast_v3 < 0, 0) %>% 
+  mutate(fit_total_vol = fit_total_vol_new,
+         lwr_total_vol = lwr_total_vol_new,
+         upr_total_vol = upr_total_vol_new,
+         fit_Detected_vol = fit_Detected_new,
+         lwr_Detected_vol = lwr_Detected_new,
+         upr_Detected_vol = upr_Detected_new)
+### end of diff code
+
+```
+
+## Plot of Bivariate diff scale KF Model Perfromance and Actual vs. Forecast
+```{r eval=TRUE, warning=FALSE, message=FALSE, echo=FALSE}
+
+#setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+
+# simul_kf_multi_step_diff_bivar_informPrior_forecast_v4 <- read.csv("simul_kf_multi_step_diff_bivar_informPrior_forecast_v4.csv", header = T) 
+
+kf_multi_step_bivar_diff_informPrior_forecast_metrics <- simul_kf_multi_step_diff_bivar_informPrior_forecast_v4 %>%
+  filter(week>5) %>% 
+  group_by(year, dep_var, forecast_step, model) %>% 
+  mutate(res_total_vol = total_vol-fit_total_vol, 
+         res_Detected = Detected-fit_Detected,
+         total_vol_within_CI = ifelse((total_vol>=lwr_total_vol & total_vol<=upr_total_vol),1,0), 
+         Detected_within_CI = ifelse((Detected>=lwr_Detected & Detected<=upr_Detected),1,0)
+        )
+
+
+kf_multi_step_bivar_diff_informPrior_forecast_metrics_v2 <- kf_multi_step_bivar_diff_informPrior_forecast_metrics %>% 
+  group_by(year, dep_var, forecast_step, model) %>% 
+  summarize(MAD_total_vol = mean(abs(res_total_vol)),
+            MAD_Detected = mean(abs(res_Detected)),
+            percent_total_vol_within_CI = mean(total_vol_within_CI),
+            percent_Detected_within_CI = mean(Detected_within_CI)
+            )
+
+kf_bivar_diff_informPrior_forecast_stats <- kf_multi_step_bivar_diff_informPrior_forecast_metrics_v2 %>%
+  group_by(dep_var, forecast_step, model) %>% 
+  summarize(mean_MAD_total_vol = mean(MAD_total_vol),
+            median_MAD_total_vol = median(MAD_total_vol),
+            mean_MAD_Detected = mean(MAD_Detected),
+            median_MAD_Detected = median(MAD_Detected),
+            mean_percent_total_vol_within_CI = mean(percent_total_vol_within_CI),
+            median_percent_total_vol_within_CI = median(percent_total_vol_within_CI),
+            mean_percent_Detected_within_CI = mean(percent_Detected_within_CI),
+            median_percent_Detected_within_CI = median(percent_Detected_within_CI)
+            )
+
+kf_multi_step_bivar_diff_informPrior_forecast_metrics_v2 %>% 
+  ggplot(data=., aes(x=as.factor(forecast_step), y=MAD_total_vol, color=model)) +
+  geom_boxplot() +
+  facet_wrap(vars(dep_var), scales = 'free', nrow = 2) +
+  ggtitle("KF Bayesian Bivariate diff Total_Vol ARIMA with informative prior performance Metrics") +
+  geom_text(data=kf_bivar_diff_informPrior_forecast_stats, aes(as.factor(forecast_step), 
+                                                        round(median_MAD_total_vol), label = round(median_MAD_total_vol)), 
+              position = position_dodge(width = 0.75), size = 2.5, vjust = -0.5)+
+  xlab("No. of Weeks ahead Forecast") + ylab("Mean Abosulte Deviation")+
+  #ylim(0, 1000)+
+  theme(legend.position="bottom")+
+  guides(colour = guide_legend(nrow = 2))
+
+kf_multi_step_bivar_diff_informPrior_forecast_metrics_v2 %>% 
+  ggplot(data=., aes(x=as.factor(forecast_step), y=MAD_Detected, color=model)) +
+  geom_boxplot() +
+  facet_wrap(vars(dep_var), scales = 'free', nrow = 2) +
+  ggtitle("KF Bayesian Bivariate diff Positive Cases ARIMA with informative prior performance Metrics") +
+  geom_text(data=kf_bivar_diff_informPrior_forecast_stats, aes(as.factor(forecast_step), 
+                                                        round(median_MAD_Detected), label = round(median_MAD_Detected)), 
+              position = position_dodge(width = 0.75), size = 2.5, vjust = -0.5)+
+   #ylim(0, 750)+
+  xlab("No. of Weeks ahead Forecast") + ylab("Mean Abosulte Deviation")+
+  theme(legend.position="bottom")+
+  guides(colour = guide_legend(nrow = 2))
+
+kf_multi_step_bivar_diff_informPrior_forecast_metrics_v2 %>% 
+  ggplot(data=., aes(x=as.factor(forecast_step), y=percent_total_vol_within_CI, color=model)) +
+  geom_boxplot() +
+  facet_wrap(vars(dep_var), scales = 'free', nrow = 2) +
+  ggtitle("KF Bayesian Bivariate Total_Vol ARIMA with informative prior performance Metrics") +
+  geom_text(data=kf_bivar_diff_informPrior_forecast_stats, aes(as.factor(forecast_step), 
+                                                        round(median_percent_total_vol_within_CI,2), 
+                                                        label= round(median_percent_total_vol_within_CI,2)), 
+              position = position_dodge(width = 0.75), size = 2.5, vjust = -0.5)+
+  xlab("No. of Weeks ahead Forecast") + ylab("Percent of Actuals with in Prediction Interval")+
+  theme(legend.position="bottom")+
+  guides(colour = guide_legend(nrow = 2))
+
+kf_multi_step_bivar_diff_informPrior_forecast_metrics_v2 %>% 
+  ggplot(data=., aes(x=as.factor(forecast_step), y=percent_Detected_within_CI, color=model)) +
+  geom_boxplot() +
+  facet_wrap(vars(dep_var), scales = 'free', nrow = 2) +
+  ggtitle("KF Bayesian Bivariate Positive Cases ARIMA with informative prior performance Metrics") +
+  geom_text(data=kf_bivar_diff_informPrior_forecast_stats, aes(as.factor(forecast_step), 
+                                                        round(median_percent_Detected_within_CI,2), 
+                                                        label= round(median_percent_Detected_within_CI,2)), 
+              position = position_dodge(width = 0.75), size = 2.5, vjust = -0.5)+
+  xlab("No. of Weeks ahead Forecast") + ylab("Percent of Actuals with in Prediction Interval")+
+  theme(legend.position="bottom")+
+  guides(colour = guide_legend(nrow = 2))
+
+
+### plots of actual vs forecast
+for (var in c("Detected")){
+  
+  plot_1 <-  simul_kf_multi_step_diff_bivar_informPrior_forecast_v4 %>% 
+    filter( year %in% c(2016:2019) & week >=6) %>% 
+  do(plots = ggplot(data=., aes(x=week, y=.data[[var]])) + 
+    geom_point(aes(colour="Actual"), size=1) +
+    geom_line(aes(x=week, y=.data[[paste("fit_", var, sep="")]], colour="Predict"), size=0.8) +
+      geom_ribbon(aes(ymin = .data[[paste("lwr_", var, sep="")]], 
+                    ymax = .data[[paste("upr_", var, sep="")]]), alpha = 0.4)+
+    scale_colour_manual("", values = c("red", "blue")) +
+    scale_fill_manual("", values = c("red", "blue")) +
+    facet_grid(year~forecast_step, scales = "free_y",
+               space = "fixed", shrink = TRUE,
+               labeller = "label_value", as.table = TRUE, drop = TRUE) +
+    theme(legend.position = "bottom")+
+    ggtitle(paste(unique(.$dep_var), unique(.$model), sep="+"))
+    )
+  
+  print(plot_1$plots)
+}
+```
+
+# SARIMA Model
+
+## Rolling 4 weeks ahead forecast
+
+```{r SARIMA, eval=FALSE}
+
+library(forecast)
+library(dplyr)
+
+# Assuming flu_data is your data frame
+flu_data$date <- as.Date(paste(flu_data$year, flu_data$week, 1), format = "%Y %U %u")
+
+# Columns to forecast
+forecast_vars <- c("total_vol", "Detected")
+
+# Initialize an empty dataframe to store all results
+sarima_forecast_df <- data.frame()
+
+# Define the fit_and_forecast function
+fit_and_forecast <- function(train_data, var, h = 4) {
+  fit <- auto.arima(train_data[[var]], seasonal = TRUE)
+  fc <- forecast(fit, h = h, level = 95)  # 95% confidence intervals
+  return(fc)
+}
+
+# Set the year to 2019. Change this to match KF model forecast
+year_to_run <- 2019
+
+# For each variable to forecast
+for (var in forecast_vars) {
+  # Filter data for the year 2019
+  year_data <- flu_data %>% filter(year == year_to_run)
+  n_weeks <- nrow(year_data)
+
+  # Loop through all possible training end weeks
+  for (i in 2:n_weeks) {
+    train <- year_data[1:i, ]
+    # Determine how many weeks ahead to forecast
+    h <- min(4, n_weeks - i)
+    # Skip if no weeks left to forecast
+    if (h <= 0) next
+
+    fc <- fit_and_forecast(train, var, h = h)
+
+    # Extract forecast, lower, and upper bounds for each horizon
+    for (horizon in 1:h) {
+      forecast_value <- max(fc$mean[horizon], 0)
+      lower_value <- max(fc$lower[horizon, "95%"], 0)
+      upper_value <- max(fc$upper[horizon, "95%"], 0)
+      test_week <- i + horizon
+
+      temp_df <- data.frame(
+        year = year_to_run,
+        train_end_week = i,
+        forecast_week = test_week,
+        horizon = horizon,
+        dep_var = var,
+        fit = forecast_value,
+        lwr = lower_value,
+        upr = upper_value
+      )
+
+      sarima_forecast_df <- bind_rows(sarima_forecast_df, temp_df)
+    }
+  }
+}
+
+# Rename columns and add metadata
+sarima_forecast_df <- sarima_forecast_df %>%
+  rename(
+    forecast_origin_id = train_end_week,
+    forecast_step = horizon,
+    week = forecast_week
+  ) %>%
+  mutate(model = "sarima", Prior = "none", n_ahead = 4, last_obs_id = 52) %>%
+  left_join(flu_data %>% dplyr::select(-date), by = c("year", "week")) %>%
+  dplyr::select(-ends_with(".y")) %>%
+  rename_with(~ gsub("\\.x$", "", .), ends_with(".x"))
+
+
+# Optionally, save the dataframe
+# write.csv(sarima_forecast_df, "sarima_forecast_df.csv", row.names = FALSE)
+
+```
+
+## Plots and Metrics of actuals vs predict
+
+```{r SRIMA_plots, eval=FALSE}
+
+library(dplyr)
+library(ggplot2)
+
+# Compute metrics
+sarima_forecast_metrics <- sarima_forecast_df %>%
+  mutate(
+    abs_deviation = abs(total_vol - fit_total_vol_sarima),
+    within_CI = ifelse(total_vol >= lwr_total_vol_sarima & total_vol <= upr_total_vol_sarima, 1, 0)
+  ) %>%
+  group_by(year, forecast_step) %>%
+  summarise(
+    MAD = mean(abs_deviation),
+    coverage_probability = mean(within_CI),
+    .groups = "drop"
+  )
+
+
+# Plot MAD
+p1 <- ggplot(sarima_forecast_metrics, aes(x = factor(forecast_step), y = MAD)) +
+  geom_boxplot() +
+  geom_text(aes(label = round(MAD, 0)),
+            position = position_dodge(width = 0.9),
+            vjust = -1, size = 3.5) +
+  labs(title = "Mean Absolute Deviation (MAD) by Horizon",
+       x = "No. of Weeks ahead",
+       y = "MAD") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+print(p1)
+
+# Plot % Within CI
+p2 <- ggplot(sarima_forecast_metrics, aes(x = factor(forecast_step), y = coverage_probability)) +
+  geom_boxplot() +
+  geom_text(aes(label = round(coverage_probability, 2)),
+            position = position_dodge(width = 0.9),
+            vjust = -1, size = 3.5) +
+  labs(title = "Coverage Probability by Horizon",
+       x = "No. of Weeks ahead",
+       y = "Coverage Probability") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+print(p2)
+
+
+# plot actuals and forecast
+ggplot(sarima_forecast_df %>% filter(year  == 2016), aes(x = week)) +
+  geom_line(aes(y = total_vol, color = "Actual"), size = 1) +
+  geom_point(aes(y = fit_total_vol_sarima, color = "Forecast"), size = 2) +
+  geom_ribbon(aes(ymin = lwr_total_vol_sarima, ymax = upr_total_vol_sarima, x = week),
+              fill = "lightblue", alpha = 0.4, color = NA) +
+  facet_wrap(~ year + forecast_step, scales = "free_y", ncol = 4, labeller = label_both) +
+  labs(x = "Week", y = "Total Volume", color = "Legend") +
+  scale_color_manual(values = c("Actual" = "black", "Forecast" = "blue")) +
+  ggtitle("SARIMA Rolling Forecasts with 95% Confidence Intervals") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+
+```
+
+# Model Comparison between KF and SARIMA
+
+```{r combine}
+
+#importing KF ensemble model results for Total lab test
+simul_kf_multi_step_ensem_informPrior_forecast_v2 <- simul_kf_multi_step_ensem_informPrior_forecast_v2 %>%
+  rename(
+    fit_total_vol = fit_total_vol_ensem,
+    lwr_total_vol = lwr_total_vol_ensem,
+    upr_total_vol = upr_total_vol_ensem
+  ) %>%
+  dplyr::select(-ends_with(".y")) %>%
+  rename_with(~ gsub("\\.x$", "", .), ends_with(".x")) %>% 
+  dplyr::select(c("year", "week", "total_vol", "Detected",
+           "fit_total_vol", "lwr_total_vol", "upr_total_vol",
+           "forecast_origin_id", "last_obs_id","n_ahead", 
+           "forecast_step", "model", "dep_var", "Prior")) %>% 
+  rename(fit = fit_total_vol,
+         lwr = lwr_total_vol, 
+         upr = upr_total_vol) %>% 
+  mutate(model = "kalman_filter",
+         dep_var = "total_vol")
+
+#importing KF model results for Positive Cases
+simul_kf_multi_step_diff_bivar_informPrior_forecast_v4 <- simul_kf_multi_step_diff_bivar_informPrior_forecast_v4 %>%
+  dplyr::select(-ends_with(".y")) %>%
+  rename_with(~ gsub("\\.x$", "", .), ends_with(".x")) %>% 
+  dplyr::select(c("year", "week", "total_vol", "Detected",
+           "fit_Detected", "lwr_Detected", "upr_Detected", 
+           "forecast_origin_id", "last_obs_id","n_ahead", 
+           "forecast_step", "model", "dep_var", "Prior"))%>% 
+  rename(fit = fit_Detected,
+         lwr = lwr_Detected, 
+         upr = upr_Detected) %>% 
+  mutate(model = "kalman_filter",
+         dep_var = "Detected")
+
+
+# Stack the data frames
+simul_combined_df <- bind_rows(
+  simul_kf_multi_step_ensem_informPrior_forecast_v2,
+  simul_kf_multi_step_diff_bivar_informPrior_forecast_v4,
+  sarima_forecast_df
+) %>%
+  dplyr::select(year, week, forecast_origin_id, forecast_step, total_vol, Detected, model, dep_var, fit, lwr, upr) %>%
+  mutate(
+    # Residuals
+    res = ifelse(dep_var == "total_vol", (total_vol - fit), (Detected - fit)),
+    # Coverage (1 if actual is within the prediction interval, else 0)
+    within_CI = ifelse(
+      (dep_var == "total_vol" & total_vol >= lwr & total_vol <= upr) |
+      (dep_var == "Detected" & Detected >= lwr & Detected <= upr),
+      1, 0
+    )
+  )
+
+#importing KF and SARIMA model results
+simul_combined_df <- read.csv("simul_combined_df.csv", header = T)
+
+# Summarize MAD and coverage by forecast_step and model
+summary_metrics <- simul_combined_df %>%
+  group_by(year, forecast_step, model, dep_var) %>%
+  summarize(
+    MAD = mean(abs(res)),
+    percent_within_CI = mean(within_CI),
+    .groups = "drop"
+  ) 
+
+summary_metrics_stats <- simul_combined_df %>%
+  group_by(dep_var, forecast_step, model) %>% 
+  summarize(MAD = mean(abs(res)),
+            MeAD = median(abs(res)),
+            mean_percent_within_CI = mean(within_CI),
+            median_percent_within_CI = median(within_CI)
+            )
+
+# Absolute Residuals box plot comparing two models side by side
+ggplot(simul_combined_df, aes(x = factor(forecast_step), y = abs(res), fill = model)) +
+  geom_boxplot(position = position_dodge(width = 0.8)) +
+  labs(
+    title = "Comparison of Absolute Residuals",
+    x = "No. of Weeks Ahead Forecast",
+    y = "Absolute Residual",
+    fill = "Model"
+  ) + geom_text(data=summary_metrics_stats, aes(as.factor(forecast_step), 
+                                                        round(MAD), 
+                                                        label= round(MAD)), 
+              position = position_dodge(width = 0.75), size = 2.5, vjust = -0.5)+
+  facet_wrap(~dep_var, scales = "free") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+# Percent Coverage box plot comparing two models side by side
+ggplot(summary_metrics, aes(x = factor(forecast_step), y = percent_within_CI, fill = model)) +
+  geom_boxplot(position = position_dodge(width = 0.8)) +
+  labs(
+    title = "Comparison of Coverage Probability ",
+    x = "No. of Weeks Ahead Forecast",
+    y = "Coverage Probability",
+    fill = "Model"
+  ) +
+  geom_text(data=summary_metrics_stats, aes(as.factor(forecast_step), 
+                                                        round(mean_percent_within_CI,2), 
+                                                        label= round(mean_percent_within_CI,2)), 
+              position = position_dodge(width = 0.75), size = 2.5, vjust = -0.5)+
+  facet_wrap(~dep_var, scales = "free") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+```
