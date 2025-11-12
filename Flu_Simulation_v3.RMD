@@ -198,7 +198,9 @@ smooth_AR_1_bivar_SSM <- function(data, dependent_var1, dependent_var2,
     
     #check that variances are non-negative
     check_model <- function(model) {
-      (model["H"] > 0 && model["Q"] > 0)
+      # (model["H"] > 0 && model["Q"] > 0)
+      all(as.vector(model["H"]) > 0) && all(as.vector(model["Q"]) > 0)
+
     }
     
     #Fit the model
