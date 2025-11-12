@@ -304,7 +304,7 @@ flu_data <- flu_data %>%
 
 ## Extract historical priors Model Defintion
 
-```{r jagsModel, eval=FALSE, warning=FALSE, message=FALSE, echo=FALSE}
+```{r jagsModel, eval=T, warning=FALSE, message=FALSE, echo=FALSE}
 kf_ensemble_extractInformativePrior  <- "
 model {
   # non informative priors on all parameters for kfar1guassJags_covariance_6.
@@ -517,7 +517,7 @@ kf_ensem_extractinformativePriors <- function(data, dependent_var1="",
 
 ## Extract historical priors
 
-```{r callJags, eval=FALSE,}
+```{r callJags, eval=T}
 # Extract informative priors
 set.seed(100)
 kf_ensem_informativePriors_jags_df <- data.frame()
@@ -634,7 +634,7 @@ kf_ensem_informativePriors_agg_df <- kf_ensem_informativePriors_agg_df %>%
 
 ## KF Model definition using informative priors
 
-```{r eval=FALSE, warning=FALSE, message=FALSE, echo=FALSE}
+```{r eval=T, warning=FALSE, message=FALSE, echo=FALSE}
 
 kf_ensemble <- "
 model {
@@ -933,7 +933,7 @@ kf_ensem_predict_informPrior <- function(data, informPrior_df,
 ```
 
 ## Ensemble KF Rolling 4 Weeks ahead forecast using informative priors
-```{r eval=FALSE, warning=FALSE, message=FALSE, echo=FALSE}
+```{r eval=T, warning=FALSE, message=FALSE, echo=FALSE}
 
 # kf_ensem_informativePriors_agg_df <- read.csv("simul_kf_ensem_informativePriors_agg_df.csv", header = T)
 
@@ -1072,7 +1072,7 @@ for (var in c("total_vol")){
 # KF Model for Postive Cases
 
 ## Extracting Bivariate KF Diff historical  priors
-```{r eval=FALSE, warning=FALSE, message=FALSE, echo=FALSE}
+```{r eval=T, warning=FALSE, message=FALSE, echo=FALSE}
 
 bivar_kfar1gaussJags8_2_extractInformativePrior <- "
 model {
@@ -1268,7 +1268,7 @@ simul_kf_bivar_diff_informativePriors_agg_df <- simul_kf_bivar_diff_informativeP
 ```
 
 ## Bivariate KF Diff Model definition using informative priors
-```{r eval=FALSE, warning=FALSE, message=FALSE, echo=FALSE}
+```{r eval=T, warning=FALSE, message=FALSE, echo=FALSE}
 
 bivar_kfar1gaussJags8_2 <- "
 model {
@@ -1486,7 +1486,7 @@ kf_bivar_predict_informPrior <- function(data, informPrior_df,
 ```
 
 ## cross validation of KF diff using informative priors
-```{r eval=FALSE, warning=FALSE, message=FALSE, echo=FALSE}
+```{r eval=T, warning=FALSE, message=FALSE, echo=FALSE}
 # simul_kf_bivar_diff_informativePriors_agg_df <- read.csv("simul_kf_bivar_diff_informativePriors_agg_df.csv", header = T)
 
 flu_data <- flu_data <- flu_data %>%
@@ -1730,7 +1730,7 @@ for (var in c("Detected")){
 
 ## Rolling 4 weeks ahead forecast
 
-```{r SARIMA, eval=FALSE}
+```{r SARIMA, eval=T}
 
 library(forecast)
 library(dplyr)
@@ -1813,7 +1813,7 @@ sarima_forecast_df <- sarima_forecast_df %>%
 
 ## Plots and Metrics of actuals vs predict
 
-```{r SRIMA_plots, eval=FALSE}
+```{r SRIMA_plots, eval=T}
 
 library(dplyr)
 library(ggplot2)
