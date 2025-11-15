@@ -86,7 +86,7 @@ This project:
   - **To save time**, we have uploaded the output files from our simulation run for each section as separate CSV files.
   - You can **skip computationally intensive sections** by importing these pre-generated CSV files as inputs for subsequent sections.
   - **Example**:
-    - Skip the **# Extract historical priors for total lab test** section by importing the output file `kf_ensem_informativePriors_agg_df.csv` as input for the **KF Model definition using informative priors** (the section that produces rolling 4-week-ahead forecasts for total lab test).
+    - Skip the **# Extract historical priors for total lab test** section by importing the output file `simul_kf_ensem_informativePriors_agg_df.csv` as input for the **KF Model definition using informative priors** (the section that produces rolling 4-week-ahead forecasts for total lab test).
 
 ---
 
