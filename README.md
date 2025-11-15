@@ -12,7 +12,7 @@ This project:
 - Extracts **historical smoothed estimates** using a KF AR(1) model to serve as covariates for the Positive Case Model.
 - Uses **SARIMA** for comparison.
 - Evaluates model performance using **Mean Absolute Deviation (MAD)** and **coverage probability**.
-- Visualizes forecasts and performance metrics.
+- Visualizes performance metrics.
 
 ---
 
@@ -47,7 +47,6 @@ This project:
   - Extracts informative priors from historical data, excluding the current year to avoid overfitting.
 - **Forecasting**:
   - Performs rolling 4-week-ahead forecasts for 2019 using informative priors.
-  - Visualizes forecasts and performance metrics.
 
 #### **B. Bivariate KF for Positive Cases**
 - **Model Definition** (`bivar_kfar1gaussJags8_2`):
@@ -55,8 +54,6 @@ This project:
   - Extracts informative priors from historical data.
 - **Forecasting**:
   - Forecasts positive cases and total volume, undoing the differencing to return to the original scale.
-  - Evaluates performance using MAD and coverage probability.
-
 ---
 
 ### **4. SARIMA Model**
@@ -64,10 +61,7 @@ This project:
   - Uses `auto.arima` to fit a seasonal ARIMA model to the data.
   - Generates rolling 4-week-ahead forecasts for 2019.
 - **Evaluation**:
-  - Computes MAD and coverage probability.
-  - Visualizes forecasts and performance metrics.
-
----
+ ---
 
 ### **5. Model Comparison**
 - **Combines Results**:
@@ -80,14 +74,19 @@ This project:
 
 ## **⚠️ Important Cautions**
 
-### **Step 3: Kalman Filter (KF) Models**
 - **MCMC Sampling Warning**:
-  - The **Kalman Filter models (Step 3)** use **Markov Chain Monte Carlo (MCMC) sampling** to generate posterior distributions for model parameters.
+  - The **Kalman Filter models (Step 3 and 4)** use **Markov Chain Monte Carlo (MCMC) sampling** to generate posterior distributions for model parameters.
   - **This process is computationally intensive** and can take **several hours or more** to complete, depending on your system's resources.
   - **Recommendations**:
     - Test the code on a **small subset of data** (e.g., 1 year instead of 4) to estimate runtime.
+    - Change the $h$ paramater to an acceptable week start date forecast. For example, h=50 will start predicting from week 3 onwards and h = 2 will start predicting from week 50.
     - Consider **parallelizing loops** or **reducing the number of MCMC iterations** for faster execution.
     - Use a **high-performance computing environment** if available.
+- **Pre-uploaded Output Files**
+  - **To save time**, we have uploaded the output files from our simulation run for each section as separate CSV files.
+  - You can **skip computationally intensive sections** by importing these pre-generated CSV files as inputs for subsequent sections.
+  - **Example**:
+    - Skip the **# Extract historical priors for total lab test** section by importing the output file `kf_ensem_informativePriors_agg_df.csv` as input for the **KF Model definition using informative priors** (the section that produces rolling 4-week-ahead forecasts for total lab test).
 
 ---
 
