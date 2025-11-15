@@ -10,7 +10,7 @@ This project:
 - Simulates synthetic weekly flu data (positive cases and total lab test volumes) for 4 years (2016–2019).
 - Implements **Kalman Filter (KF)** models (ensemble and bivariate) to forecast flu positive cases (P) and lab test volumes (T).
 - Extracts **historical smoothed estimates** using a KF AR(1) model to serve as covariates for the Positive Case Model.
-- Uses **SARIMA** for comparison.
+- Implements **SARIMA** forecast for comparison.
 - Evaluates model performance using **Mean Absolute Deviation (MAD)** and **coverage probability**.
 - Visualizes performance metrics.
 
