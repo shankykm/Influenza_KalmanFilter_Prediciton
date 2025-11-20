@@ -97,9 +97,21 @@ This project:
      ```r
      install.packages(c("tidyverse", "lubridate", "forecast", "KFAS", "rjags", "ggplot2", "dplyr", "knitr"))
      ```
+## Quick Start: Run a Sample Forecast
+To quickly see the model in action, we provide a sample script that produces a **4-week forecast at a single time point**. This is ideal for testing or demonstration purposes.
+
+### File: [Flu_Simulation_SampleModel.R](Flu_Simulation_SampleModel.R)
+- **Purpose**: Generates a 4-week forecast at a single time point, allowing users to see output without running the full simulation.
+- **How to Use**:
+  1. Open the `Flu_Simulation_SampleModel.R` file in R or RStudio.
+  2. Run the script. It will load the necessary libraries, simulate a small dataset, and produce a forecast.
+  3. View the output and visualizations directly in your R environment.
+
+This script is a great way to verify your setup and get a sense of the model's output before running the full simulation.
+
    - Ensure `JAGS` is installed for Bayesian modeling.
 
-2. **Clone the Repository**:
+1. **Clone the Repository**:
    ```bash
    git clone https://github.com/yourusername/yourrepo.git
    cd yourrepo
