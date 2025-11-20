@@ -7,11 +7,8 @@ library(R2jags)
 # import informative priors
 # =============================================================================
 flu_data <- read.csv("flu_data.csv", header=TRUE)
-simul_kf_ensem_informativePriors_agg_df <- read.csv("F://CCF Files//CCF_Old_Laptop_shortcut//CCF_DeskopFiles//Books_Articles_litreatures//GraduateDegree//OSU//Thesis//Short term Flu Prediction Model//modelOutputData//Simulation//simul_kf_ensem_informativePriors_agg_df.csv", header=TRUE)
-# simul_kf_ensem_informativePriors_agg_df <- read.csv("simul_kf_ensem_informativePriors_agg_df.csv", header=TRUE)
-
-simul_kf_bivar_diff_informativePriors_agg_df <- read.csv("F://CCF Files//CCF_Old_Laptop_shortcut//CCF_DeskopFiles//Books_Articles_litreatures//GraduateDegree//OSU//Thesis//Short term Flu Prediction Model//modelOutputData//Simulation//simul_kf_bivar_diff_informativePriors_agg_df.csv", header=TRUE)
-# simul_kf_bivar_diff_informativePriors_agg_df <- read.csv("simul_kf_bivar_diff_informativePriors_agg_df.csv", header=TRUE)
+simul_kf_ensem_informativePriors_agg_df <- read.csv("simul_kf_ensem_informativePriors_agg_df.csv", header=TRUE)
+simul_kf_bivar_diff_informativePriors_agg_df <- read.csv("simul_kf_bivar_diff_informativePriors_agg_df.csv", header=TRUE)
 
 # =============================================================================
 # Total Lab test forecast using KF Ensemble Model with informative priors
@@ -614,4 +611,5 @@ simul_kf_multi_step_diff_bivar_informPrior_forecast_v4 <- replace(simul_kf_multi
          fit_Detected_vol = fit_Detected_new,
          lwr_Detected_vol = lwr_Detected_new,
          upr_Detected_vol = upr_Detected_new)
+
 
