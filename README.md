@@ -59,7 +59,7 @@ This project:
 ### **4. SARIMA Model**
 - **Model Fitting**:
   - Uses `auto.arima` to fit a seasonal ARIMA model to the data.
-  - Generates rolling 4-week-ahead forecasts for 2019.
+  - Generates rolling 4-week-ahead forecasts for a seasonal year.
 - **Evaluation**:
  ---
 
