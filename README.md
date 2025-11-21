@@ -104,8 +104,7 @@ To quickly see the model in action, we provide a sample script that produces a *
 - **Purpose**: Generates a 4-week forecast at a single time point, allowing users to see output without running the full simulation.
 - **How to Use**:
   1. Open the `Flu_Simulation_SampleModel.R` file in R or RStudio.
-  2. Run the script. It will load the necessary libraries, simulate a small dataset, and produce a forecast.
-  3. View the output and visualizations directly in your R environment.
+  2. Run the script. It will importthe flu dataset, and produce a forecast.
 
 This script is a great way to verify your setup and get a sense of the model's output before running the full simulation.
 
