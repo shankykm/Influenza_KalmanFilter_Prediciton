@@ -112,5 +112,5 @@ This script is a great way to verify your setup and get a sense of the model's o
 
 1. **Clone the Repository**:
    ```bash
-   git clone https://github.com/yourusername/yourrepo.git
+   git clone https://github.com/shankykm/Influenza_KalmanFilter_Prediciton.git
    cd yourrepo
