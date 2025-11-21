@@ -23,7 +23,7 @@ This project:
 ### **1. Setup and Data Simulation**
 - **Libraries**: Loads required R packages (`tidyverse`, `lubridate`, `forecast`, `KFAS`, `rjags`, etc.).
 - **Data Simulation**:
-  - Simulates weekly flu data (`P_simulated` for positive cases, `T_simulated` for total volume) using a bivariate normal distribution.
+  - Simulates weekly flu data (`P` for positive cases, `T` for total volume) using a bivariate normal distribution.
   - Uses synthetic means and standard deviations, with a correlation of 0.93 between the two variables.
   - Ensures non-negativity of simulated values.
 
